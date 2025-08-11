@@ -1,26 +1,18 @@
-# app.py — versão corrigida e completa
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
 from flask_sqlalchemy import SQLAlchemy
 from functools import wraps
-from datetime import date, datetime, timedelta
+from datetime import date
 import json
 from io import BytesIO
 
-# -----------------------------
-# Configurações de caminho/instance
-# -----------------------------
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 INSTANCE_PATH = os.path.join(BASE_DIR, 'instance')
-
-# Garantir que exista a pasta instance (NÃO comitar essa pasta no git)
 os.makedirs(INSTANCE_PATH, exist_ok=True)
 
 app = Flask(__name__, instance_path=INSTANCE_PATH)
 app.secret_key = os.environ.get('SECRET_KEY', 'chave_super_secreta')
 
-# DATABASE: primeiro tenta usar variável de ambiente (para Postgres em produção),
-# senão usa sqlite local em instance/banco.db
 DATABASE_URL = os.environ.get('DATABASE_URL')
 if DATABASE_URL:
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
@@ -28,12 +20,8 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(INSTANCE_PATH, 'banco.db')
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
 db = SQLAlchemy(app)
 
-# -----------------------------
-# MODELOS (exemplo mínimo)
-# -----------------------------
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(80), nullable=False, unique=True)
@@ -59,7 +47,7 @@ class Venda(db.Model):
     forma_pagamento = db.Column(db.String(50))
     observacoes = db.Column(db.Text)
     total = db.Column(db.Float, nullable=False, default=0.0)
-    itens = db.Column(db.Text)  # JSON string: [{id, nome, qtd, preco}, ...]
+    itens = db.Column(db.Text)
 
 class Caixa(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -70,13 +58,10 @@ class Caixa(db.Model):
 class Lancamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     data = db.Column(db.String(20))
-    tipo = db.Column(db.String(10))  # 'entrada' ou 'saida'
+    tipo = db.Column(db.String(10))
     descricao = db.Column(db.String(200))
     valor = db.Column(db.Float)
 
-# -----------------------------
-# HELPERS
-# -----------------------------
 def login_required(f):
     @wraps(f)
     def wrap(*args, **kwargs):
@@ -85,9 +70,6 @@ def login_required(f):
         return f(*args, **kwargs)
     return wrap
 
-# -----------------------------
-# ROTAS (login / index)
-# -----------------------------
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -108,12 +90,8 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    # você pode manter o layout do menu principal aqui
     return render_template('index.html')
 
-# -----------------------------
-# PRODUTOS
-# -----------------------------
 @app.route('/produtos')
 @login_required
 def produtos():
@@ -144,9 +122,6 @@ def novo_produto():
         return redirect(url_for('produtos'))
     return render_template('novo_produto.html', categorias=categorias)
 
-# -----------------------------
-# CATEGORIAS
-# -----------------------------
 @app.route('/categorias', methods=['GET', 'POST'])
 @login_required
 def categorias():
@@ -158,7 +133,7 @@ def categorias():
             db.session.commit()
             flash('Categoria criada', 'success')
             return redirect(url_for('categorias'))
-    todas = Category = Categoria.query.order_by(Categoria.nome).all()
+    todas = Categoria.query.order_by(Categoria.nome).all()
     return render_template('categorias.html', categorias=todas)
 
 @app.route('/categorias/excluir/<int:id>', methods=['POST'])
@@ -170,9 +145,6 @@ def excluir_categoria(id):
         db.session.commit()
     return redirect(url_for('categorias'))
 
-# -----------------------------
-# VENDAS
-# -----------------------------
 @app.route('/vendas', methods=['GET', 'POST'])
 @login_required
 def vendas():
@@ -182,10 +154,9 @@ def vendas():
         forma = request.form.get('forma_pagamento','').strip()
         obs = request.form.get('observacoes','').strip()
         total = float(request.form.get('total',0) or 0)
-        itens_json = request.form.get('itens')  # espera JSON string
+        itens_json = request.form.get('itens')
         v = Venda(data=hoje, forma_pagamento=forma, observacoes=obs, total=total, itens=itens_json)
         db.session.add(v)
-        # se existir caixa aberto no dia soma o lancamento
         caixa = Caixa.query.filter_by(data=hoje).first()
         if caixa:
             lanc = Lancamento(data=hoje, tipo='entrada', descricao='Venda', valor=total)
@@ -194,9 +165,6 @@ def vendas():
         return redirect(url_for('vendas'))
     return render_template('vendas.html', produtos=produtos)
 
-# -----------------------------
-# CAIXA
-# -----------------------------
 @app.route('/caixa')
 @login_required
 def caixa():
@@ -219,7 +187,6 @@ def abrir_caixa():
     valor = float(request.form.get('valor',0) or 0)
     c = Caixa.query.filter_by(data=hoje).first()
     if c:
-        # já existe: apenas reabrir se fechado
         c.saldo_inicial = valor
         c.aberto = True
     else:
@@ -276,30 +243,22 @@ def caixas_anteriores():
                           'entradas': total_ent, 'despesas': total_des, 'final': saldo_final, 'aberto': c.aberto})
     return render_template('caixas_anteriores.html', caixas=resultado)
 
-# -----------------------------
-# RELATÓRIOS
-# -----------------------------
 @app.route('/relatorios')
 @login_required
 def relatorios():
-    # pega o último caixa (exemplo)
     caixas = Caixa.query.order_by(Caixa.data).all()
     if not caixas:
         return render_template('relatorios.html', vendas_por_forma={}, top_produtos=[], despesas=[], comparativo=[])
     ultimo = caixas[-1]
     vendas = Venda.query.filter_by(data=ultimo.data).all()
     lancs = Lancamento.query.filter_by(data=ultimo.data).all()
-
     saldo_inicial = ultimo.saldo_inicial
     total_vendas = sum(v.total for v in vendas)
     total_despesas = sum(l.valor for l in lancs if l.tipo == 'saida')
     saldo_final = saldo_inicial + total_vendas - total_despesas
-
     formas = {}
     for v in vendas:
         formas[v.forma_pagamento] = formas.get(v.forma_pagamento, 0) + v.total
-
-    # top produtos (contagem simples)
     contagem = {}
     for v in vendas:
         if v.itens:
@@ -313,10 +272,7 @@ def relatorios():
             except Exception:
                 pass
     top = sorted(contagem.items(), key=lambda x: x[1], reverse=True)[:10]
-
     despesas = [l for l in lancs if l.tipo == 'saida']
-
-    # comparativo mensal (exemplo simples)
     meses = sorted(set(c.data[:7] for c in caixas))
     comparativo = []
     for mes in meses:
@@ -324,7 +280,6 @@ def relatorios():
         vendas_mes = sum(sum(v.total for v in Venda.query.filter_by(data=c.data)) for c in caixas_mes)
         despesas_mes = sum(sum(l.valor for l in Lancamento.query.filter_by(data=c.data) if l.tipo == 'saida') for c in caixas_mes)
         comparativo.append({'mes': mes, 'vendas': vendas_mes, 'despesas': despesas_mes, 'lucro': vendas_mes - despesas_mes})
-
     return render_template('relatorios.html',
                            saldo_inicial=saldo_inicial,
                            total_vendas=total_vendas,
@@ -335,13 +290,9 @@ def relatorios():
                            despesas=despesas,
                            comparativo=comparativo)
 
-# -----------------------------
-# UTIL: gerar PDF simples (exemplo)
-# -----------------------------
 @app.route('/relatorios/pdf', methods=['POST'])
 @login_required
 def gerar_pdf():
-    # exemplo simples: recebe html e devolve PDF (xhtml2pdf precisa estar em requirements)
     from xhtml2pdf import pisa
     html = request.form.get('html','')
     result = BytesIO()
@@ -349,19 +300,12 @@ def gerar_pdf():
     result.seek(0)
     return send_file(result, download_name='relatorio.pdf', as_attachment=True)
 
-# -----------------------------
-# RUN
-# -----------------------------
 if __name__ == '__main__':
-    # cria todas as tabelas dentro do contexto da app
     with app.app_context():
         db.create_all()
-        # cria usuário padrão (troca nome/senha conforme pediu)
         if not Usuario.query.filter_by(nome='HGMOTO').first():
             user = Usuario(nome='HGMOTO', senha='hgmotopecas2025')
             db.session.add(user)
             db.session.commit()
-
     port = int(os.environ.get('PORT', 5000))
-    # Bind no host 0.0.0.0 pra funcionar no Render
     app.run(host='0.0.0.0', port=port, debug=False)
