@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Vendas</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+            background-size: cover;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        .container {
+            max-width: 850px;
+            margin: 90px auto;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 25px;
+            border-radius: 10px;
+        }
+        table {
+            width: 100%;
+            background-color: #222;
+            margin-bottom: 20px;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #444;
+        }
+        input[type="number"], select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+        .btn {
+            background-color: #33b5e5;
+            color: #fff;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        .btn:hover {
+            background-color: #0099cc;
+        }
+    </style>
+    <script>
+        let produtosSelecionados = [];
+
+        function adicionarProduto(nome, preco) {
+            const quantidade = prompt("Quantidade do produto: " + nome);
+            if (!quantidade || isNaN(quantidade)) return;
+
+            const totalProduto = (parseFloat(preco) * parseInt(quantidade)).toFixed(2);
+            produtosSelecionados.push(`${nome} x${quantidade} - R$ ${totalProduto}`);
+
+            atualizarResumo();
+        }
+
+        function atualizarResumo() {
+            let total = 0;
+            let lista = "";
+
+            produtosSelecionados.forEach(p => {
+                lista += p + "\\n";
+                const valor = parseFloat(p.split('R$ ')[1]);
+                if (!isNaN(valor)) total += valor;
+            });
+
+            document.getElementById("itens").value = produtosSelecionados.join(',');
+            document.getElementById("total").value = total.toFixed(2);
+            document.getElementById("resumo").innerText = lista;
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h2>Registrar Venda</h2>
+
+        <form method="POST">
+            <label>Forma de Pagamento:</label>
+            <select name="forma_pagamento" required>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Cartão">Cartão</option>
+                <option value="Pix">Pix</option>
+            </select>
+
+            <label>Observações:</label>
+            <textarea name="observacoes" rows="3" placeholder="Ex: cliente pagou com troco..."></textarea>
+
+            <label>Resumo dos Produtos Selecionados:</label>
+            <pre id="resumo" style="background:#111; padding:10px; min-height:60px;"></pre>
+
+            <input type="hidden" name="itens" id="itens">
+            <input type="hidden" name="total" id="total">
+
+            <button type="submit" class="btn">Finalizar Venda</button>
+            <a href="{{ url_for('index') }}" class="btn">Menu</a>
+        </form>
+
+        <h3>Produtos Disponíveis:</h3>
+        <table>
+            <tr>
+                <th>Produto</th>
+                <th>Preço Varejo</th>
+                <th>Ação</th>
+            </tr>
+            {% for p in produtos %}
+            <tr>
+                <td>{{ p.nome }}</td>
+                <td>R$ {{ '%.2f'|format(p.preco_varejo) }}</td>
+                <td><button type="button" class="btn" onclick="adicionarProduto('{{ p.nome }}', '{{ p.preco_varejo }}')">Adicionar</button></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+</body>
+</html>

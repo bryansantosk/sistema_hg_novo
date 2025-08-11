@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Relatórios Financeiros</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background-image: url("{{ url_for('static', filename='internal_bg.jpg') }}");
+            background-size: cover;
+            background-position: center;
+            color: white;
+        }
+        .container { margin-top: 80px; }
+        table { width: 100%; background-color: rgba(0, 0, 0, 0.8); }
+        th, td { padding: 10px; text-align: left; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>📊 Relatório Financeiro Automático</h2>
+    <a href="{{ url_for('index') }}" class="btn">Menu</a>
+
+    {% if saldo_inicial is defined %}
+    <p>📅 PERÍODO: {{ caixas[-1].data }}</p>
+    <p>💰 SALDO INICIAL: R$ {{ saldo_inicial }}</p>
+    <p>🛒 TOTAL DE VENDAS: R$ {{ total_vendas }}</p>
+    <p>➖ TOTAL DE DESPESAS: R$ {{ total_despesas }}</p>
+    <p>💵 SALDO FINAL: R$ {{ saldo_final }}</p>
+
+    <h3>💳 Vendas por Forma de Pagamento</h3>
+    <ul>
+        {% for forma, valor in vendas_por_forma.items() %}
+            <li>{{ forma }}: R$ {{ valor }}</li>
+        {% endfor %}
+    </ul>
+
+    <h3>🏆 Top 3 Produtos Vendidos</h3>
+    <ol>
+        {% for nome, qtd in top_produtos %}
+            <li>{{ nome }} — {{ qtd }} unidades</li>
+        {% endfor %}
+    </ol>
+
+    <h3>💸 Despesas</h3>
+    <ul>
+        {% for d in despesas %}
+            <li>{{ d.descricao }} — R$ {{ d.valor }}</li>
+        {% endfor %}
+    </ul>
+
+    <h3>📆 Comparativo Mensal</h3>
+    <table border="1">
+        <tr>
+            <th>Mês</th>
+            <th>Vendas</th>
+            <th>Despesas</th>
+            <th>Lucro</th>
+        </tr>
+        {% for mes in comparativo %}
+        <tr>
+            <td>{{ mes.mes }}</td>
+            <td>R$ {{ mes.vendas }}</td>
+            <td>R$ {{ mes.despesas }}</td>
+            <td>R$ {{ mes.lucro }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+        <p><strong>Nenhum dado encontrado. Cadastre um caixa para gerar relatórios.</strong></p>
+    {% endif %}
+</div>
+</body>
+</html>

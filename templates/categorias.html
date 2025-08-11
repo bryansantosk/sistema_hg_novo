@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Categorias</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+            background-size: cover;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        .container {
+            max-width: 600px;
+            margin: 100px auto 50px auto;
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 30px;
+            border-radius: 12px;
+        }
+        input {
+            width: 80%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 6px;
+            border: none;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 15px;
+            background-color: #33b5e5;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .btn:hover {
+            background-color: #0099cc;
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            background-color: #222;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #444;
+        }
+        form.inline {
+            display: inline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Categorias</h2>
+
+        <form method="POST">
+            <input type="text" name="nome" placeholder="Nova categoria" required>
+            <button class="btn" type="submit">Adicionar</button>
+            <a class="btn" href="{{ url_for('index') }}">Menu</a>
+        </form>
+
+        {% if categorias %}
+        <table>
+            <tr>
+                <th>Nome</th>
+                <th>Ações</th>
+            </tr>
+            {% for c in categorias %}
+            <tr>
+                <td>{{ c.nome }}</td>
+                <td>
+                    <form class="inline" action="{{ url_for('excluir_categoria', id=c.id) }}" method="POST">
+                        <button class="btn" type="submit" onclick="return confirm('Confirmar exclusão?')">Excluir</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+            <p>Nenhuma categoria cadastrada.</p>
+        {% endif %}
+    </div>
+</body>
+</html>
