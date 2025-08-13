@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}Orçamento #{{ "%03d"|format(o.id) }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Orçamento #{{ "%03d"|format(o.id) }}</h1>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('orcamentos') }}">⬅ Voltar</a>
+    {% if o.status != 'fechado' %}
+      <form method="post" action="{{ url_for('orcamento_fechar', id=o.id) }}" style="display:inline" onsubmit="return confirm('Fechar orçamento?');">
+        <select name="forma_pagamento">
+          <option>Dinheiro</option><option>Cartão</option><option>Pix</option>
+        </select>
+        <button class="btn primary">Fechar orçamento</button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="grid" style="grid-template-columns: 1fr 1fr;">
+    <div>
+      <div><strong>Cliente:</strong> {{ o.cliente_nome or '-' }}</div>
+      <div><strong>Telefone:</strong> {{ o.cliente_telefone or '-' }}</div>
+    </div>
+    <div>
+      <div><strong>Moto:</strong> {{ o.moto_modelo or '-' }} {{ o.moto_ano and ('/ ' ~ o.moto_ano) or '' }}</div>
+      <div><strong>Data:</strong> {{ o.data_criacao }}</div>
+      <div><strong>Status:</strong> <span class="badge {{ 'ok' if o.status=='aberto' else 'warn' }}">{{ o.status|upper }}</span></div>
+    </div>
+  </div>
+</div>
+
+{% if o.status != 'fechado' %}
+<div class="card">
+  <h3>Adicionar item</h3>
+  <form method="post" class="row">
+    <input type="hidden" name="acao" value="add_item">
+    <select name="produto_id" required>
+      {% for p in produtos %}
+        <option value="{{ p.id }}">{{ "%03d"|format(p.id) }} — {{ p.nome }} (R$ {{ '%.2f'|format(p.preco_varejo or 0) }})</option>
+      {% endfor %}
+    </select>
+    <input name="qtd" type="number" min="1" value="1" style="max-width:100px">
+    <button class="btn">Adicionar</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Itens</h3>
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="width:90px">Cód</th>
+        <th>Produto</th>
+        <th style="width:90px">Qtd</th>
+        <th style="width:120px">Preço</th>
+        <th style="width:140px">Subtotal</th>
+        {% if o.status != 'fechado' %}<th style="width:90px">Ações</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% set total = 0 %}
+      {% for it in itens %}
+        {% set subtotal = (it.qtd or 0) * (it.preco or 0) %}
+        {% set total = total + subtotal %}
+        <tr>
+          <td>{{ "%03d"|format(it.id) }}</td>
+          <td>{{ it.nome }}</td>
+          <td>{{ it.qtd }}</td>
+          <td>R$ {{ '%.2f'|format(it.preco or 0) }}</td>
+          <td>R$ {{ '%.2f'|format(subtotal) }}</td>
+          {% if o.status != 'fechado' %}
+          <td>
+            <form method="post" onsubmit="return confirm('Remover este item?');">
+              <input type="hidden" name="acao" value="rm_item">
+              <input type="hidden" name="idx" value="{{ loop.index0 }}">
+              <button class="btn danger">Remover</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+      {% else %}
+        <tr><td colspan="{{ 5 + (1 if o.status != 'fechado' else 0) }}" class="empty">Nenhum item.</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <th colspan="{{ 4 + (1 if o.status != 'fechado' else 0) }}" style="text-align:right">Total</th>
+        <th>R$ {{ '%.2f'|format(total) }}</th>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endblock %}

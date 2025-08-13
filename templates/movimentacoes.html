@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}Movimentos{% endblock %}
+{% block content %}
+<div class="tabs">
+  <a class="tab {{ 'active' if tipo=='venda' else '' }}" href="{{ url_for('movimentacoes', tipo='venda') }}">Vendas</a>
+  <a class="tab {{ 'active' if tipo=='entrada' else '' }}" href="{{ url_for('movimentacoes', tipo='entrada') }}">Entradas</a>
+  <a class="tab {{ 'active' if tipo=='saida' else '' }}" href="{{ url_for('movimentacoes', tipo='saida') }}">Saídas</a>
+</div>
+
+{% if tipo=='venda' %}
+<div class="card">
+  <h2>Nova venda</h2>
+  <form method="post" onsubmit="return montarItens()">
+    <input type="hidden" name="tipo" value="venda">
+    <input type="hidden" name="itens" id="itens_json">
+    <div class="row">
+      <select id="prod_sel">
+        {% for p in produtos %}
+          <option
+            value="{{ p.id }}"
+            data-varejo="{{ p.preco_varejo|default(0, true) }}"
+            data-atacado="{{ p.preco_atacado|default(0, true) }}"
+          >{{ "%03d"|format(p.id) }} — {{ p.nome }}</option>
+        {% endfor %}
+      </select>
+
+      <select id="tipo_preco">
+        <option value="varejo">Varejo</option>
+        <option value="atacado">Atacado</option>
+      </select>
+
+      <div class="qty">
+        <button type="button" onclick="dec()">−</button>
+        <input id="qtd" value="1">
+        <button type="button" onclick="inc()">+</button>
+      </div>
+      <button class="btn" type="button" onclick="addItem()">Adicionar</button>
+    </div>
+
+    <table class="table" id="tabela">
+      <thead><tr><th>Cód</th><th>Produto</th><th>Qtd</th><th>Preço</th><th>Total</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="right">
+      <label>Total</label>
+      <input name="valor" id="total" readonly value="0">
+      <select name="forma_pagamento">
+        <option>Dinheiro</option><option>Cartão</option><option>Pix</option>
+      </select>
+      <input name="observacoes" placeholder="Observações">
+      <button class="btn primary">Finalizar venda</button>
+    </div>
+  </form>
+</div>
+
+<script>
+let lista = [];
+function inc(){ document.getElementById('qtd').value = (+document.getElementById('qtd').value||1)+1 }
+function dec(){ let v=(+document.getElementById('qtd').value||1)-1; document.getElementById('qtd').value = v<1?1:v }
+
+function addItem(){
+  const sel = document.getElementById('prod_sel');
+  const id = +sel.value;
+  const nome = sel.options[sel.selectedIndex].text.split(' — ').slice(1).join(' — ');
+  const tipo = document.getElementById('tipo_preco').value;
+  const varejo = +sel.options[sel.selectedIndex].dataset.varejo || 0;
+  const atacado = +sel.options[sel.selectedIndex].dataset.atacado || 0;
+  const preco = (tipo === 'atacado') ? atacado : varejo;
+  const qtd = +document.getElementById('qtd').value || 1;
+  lista.push({id, nome, qtd, preco});
+  render();
+}
+function render(){
+  const tbody = document.querySelector('#tabela tbody');
+  tbody.innerHTML = '';
+  let tot = 0;
+  lista.forEach((it, i)=>{
+    const parcial = it.qtd*it.preco;
+    tot += parcial;
+    const linha = document.createElement('tr');
+    linha.innerHTML = `<td>${String(it.id).padStart(3,'0')}</td><td>${it.nome}</td><td>${it.qtd}</td><td>${it.preco.toFixed(2)}</td><td>${parcial.toFixed(2)}</td>
+      <td><button class="btn danger" type="button" onclick="rem(${i})">x</button></td>`;
+    tbody.appendChild(linha);
+  });
+  document.getElementById('total').value = tot.toFixed(2);
+}
+function rem(i){ lista.splice(i,1); render(); }
+function montarItens(){
+  document.getElementById('itens_json').value = JSON.stringify(lista);
+  return true;
+}
+</script>
+
+{% elif tipo=='entrada' %}
+<div class="card narrow">
+  <h2>Entrada manual</h2>
+  <form method="post">
+    <input type="hidden" name="tipo" value="entrada">
+    <label>Valor</label>
+    <input name="valor" type="number" step="0.01" required>
+    <label>Observações</label>
+    <input name="observacoes">
+    <button class="btn primary">Lançar entrada</button>
+  </form>
+</div>
+
+{% else %}
+<div class="card narrow">
+  <h2>Saída manual</h2>
+  <form method="post">
+    <input type="hidden" name="tipo" value="saida">
+    <label>Valor</label>
+    <input name="valor" type="number" step="0.01" required>
+    <label>Observações</label>
+    <input name="observacoes">
+    <button class="btn primary">Lançar saída</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Movimentações do dia</h3>
+  {% if vendas %}<p><strong>Vendas:</strong> {{ vendas|length }}</p>{% endif %}
+  {% if entradas %}<p><strong>Entradas:</strong> {{ entradas|length }}</p>{% endif %}
+  {% if saidas %}<p><strong>Saídas:</strong> {{ saidas|length }}</p>{% endif %}
+</div>
+{% endblock %}

@@ -1,28 +1,63 @@
-body {
-    margin: 0;
-    padding: 0;
-    font-family: Arial, sans-serif;
-    background-color: #000;
-    color: white;
-}
+/* Reset & base */
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;font:16px/1.5 "Inter",system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;background:#f5f7fb}
 
-.container {
-    max-width: 800px;
-    margin: 70px auto;
-    background-color: rgba(0,0,0,0.8);
-    padding: 25px;
-    border-radius: 10px;
-}
+.container{width:min(1100px,92%);margin-inline:auto;padding:20px 0}
 
-.btn {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    background-color: #2196f3;
-    color: white;
-    cursor: pointer;
-}
+/* Topbar */
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:#0f172a;color:#fff;border-bottom:1px solid #13233c}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800}
+.brand img{width:34px;height:34px;border-radius:8px}
+.menu{display:flex;gap:8px;flex-wrap:wrap}
+.menu a{color:#e6edf3;text-decoration:none;background:#15233d;border:1px solid #1f2f4c;padding:8px 12px;border-radius:10px}
+.menu a:hover{background:#1a2c4c} .menu .logout{background:#ef4444;border-color:#ef4444}
 
-.btn:hover {
-    background-color: #1976d2;
-}
+/* Cards & table */
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;box-shadow:0 6px 24px rgba(16,24,40,.06);margin-bottom:16px}
+.table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+.table thead th{background:#0f172a;color:#fff;text-align:left;font-size:13px;padding:10px 12px}
+.table tbody td{padding:10px 12px;border-top:1px solid #eef2f7}
+.table tbody tr:hover{background:#f8fafc}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border-radius:10px;
+  font-weight:700;border:none;cursor:pointer;color:#0b1118;background:#6ee7b7}
+.btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+.btn.primary{background:#22c55e;color:#06110a}
+.btn.danger{background:#ef4444;color:#fff}
+.btn.btn-secondary{background:#0f172a;color:#e6edf3;border:1px solid #1e293b}
+
+/* Forms */
+label{display:block;font-size:13px;color:#64748b;margin:6px 0}
+input[type="text"],input[type="number"],input[type="date"],input[type="tel"],input[type="password"],select,textarea{
+  width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:10px;background:#fff;color:#111;outline:0}
+input:focus,select:focus,textarea:focus{border-color:#60a5fa;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+textarea{min-height:120px;resize:vertical}
+.w-full{width:100%}
+
+/* Layout helpers */
+.row{display:flex;gap:8px;flex-wrap:wrap} .right{margin-left:auto}
+.grid.quick{display:grid;gap:16px;grid-template-columns:repeat(2,1fr)} @media(max-width:720px){.grid.quick{grid-template-columns:1fr}}
+.tile{display:block;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:20px;text-decoration:none;color:#0f172a;
+  font-weight:800;text-align:center;box-shadow:0 6px 24px rgba(16,24,40,.06)}
+.tile:hover{filter:brightness(1.02);transform:translateY(-1px)}
+
+/* Qty */
+.qty{display:inline-flex;align-items:center;gap:8px;border:1px solid #e5e7eb;border-radius:10px;padding:6px;background:#fff}
+.qty button{width:34px;height:34px;border-radius:8px;border:1px solid #e5e7eb;background:#f8fafc;cursor:pointer}
+.qty input{width:56px;text-align:center;border:none;background:transparent;font-weight:700}
+
+/* Tabs */
+.tabs{display:flex;gap:8px;margin-bottom:12px}
+.tab{padding:8px 12px;border-radius:999px;background:#e5e7eb;color:#0f172a;text-decoration:none;font-weight:700}
+.tab.active{background:#0f172a;color:#fff}
+
+/* Login */
+.login-wrap{min-height:calc(100vh - 80px);display:grid;place-items:center;padding:30px 0}
+.login-card{width:min(420px,92%);background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px;box-shadow:0 10px 30px rgba(16,24,40,.08)}
+.login-card h1{margin:0 0 6px}.login-card .hint{color:#64748b;font-size:13px;margin-bottom:14px}
+
+/* Flash */
+.flash-stack{display:grid;gap:10px;margin-bottom:12px}
+.flash{background:#fff;border:1px solid #e5e7eb;border-left:4px solid #60a5fa;padding:10px 12px;border-radius:10px}

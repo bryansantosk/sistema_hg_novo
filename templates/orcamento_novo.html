@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block title %}Novo orçamento{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h2>Novo orçamento</h2>
+  <form method="post" class="grid form2">
+    <label>Cliente</label>
+    <input name="cliente_nome" required>
+
+    <label>Telefone</label>
+    <input name="cliente_telefone" type="tel" placeholder="(00) 00000-0000">
+
+    <label>Moto (modelo)</label>
+    <input name="moto_modelo" placeholder="Ex.: CG 160 Fan">
+
+    <label>Moto (ano)</label>
+    <input name="moto_ano" placeholder="Ex.: 2022">
+
+    <div class="col-span-2 right">
+      <a class="btn" href="{{ url_for('orcamentos') }}">Cancelar</a>
+      <button class="btn primary">Criar orçamento</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,47 +1,26 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <title>Caixas Anteriores</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
-    <style>
-        body {
-            background-image: url("{{ url_for('static', filename='internal_bg.jpg') }}");
-            background-size: cover;
-            background-position: center;
-            color: white;
-        }
-        .container { margin-top: 100px; }
-        table { width: 100%; background-color: rgba(0, 0, 0, 0.8); }
-        th, td { padding: 10px; text-align: center; }
-    </style>
-</head>
-<body>
-<div class="container">
-    <h2>Caixas Anteriores</h2>
-    <a href="{{ url_for('index') }}" class="btn">Voltar ao Menu</a>
-    <table border="1">
-        <tr>
-            <th>Data</th>
-            <th>Saldo Inicial</th>
-            <th>Entradas</th>
-            <th>Vendas</th>
-            <th>Despesas</th>
-            <th>Saldo Final</th>
-            <th>Status</th>
-        </tr>
-        {% for caixa in caixas %}
-        <tr>
-            <td>{{ caixa.data }}</td>
-            <td>R$ {{ caixa.inicial }}</td>
-            <td>R$ {{ caixa.entradas }}</td>
-            <td>R$ {{ caixa.vendas }}</td>
-            <td>R$ {{ caixa.despesas }}</td>
-            <td><strong>R$ {{ caixa.final }}</strong></td>
-            <td>{{ 'Aberto' if caixa.aberto else 'Fechado' }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+{% extends 'base.html' %}
+{% block title %}Fechamentos anteriores{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>Fechamentos anteriores</h2>
+  <table class="table">
+    <thead>
+      <tr><th>Data</th><th>Inicial</th><th>Entradas</th><th>Saídas</th><th>Final</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for c in caixas %}
+      <tr>
+        <td>{{ c.data }}</td>
+        <td>R$ {{ '%.2f'|format(c.inicial) }}</td>
+        <td>R$ {{ '%.2f'|format(c.entradas) }}</td>
+        <td>R$ {{ '%.2f'|format(c.saidas) }}</td>
+        <td>R$ {{ '%.2f'|format(c.final) }}</td>
+        <td>{{ 'ABERTO' if c.aberto else 'FECHADO' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">Nada por aqui ainda.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
-</body>
-</html>
+{% endblock %}

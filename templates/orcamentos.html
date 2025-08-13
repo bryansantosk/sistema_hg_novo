@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block title %}Orçamentos{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Orçamentos</h1>
+  <div class="actions">
+    <a class="btn primary" href="{{ url_for('orcamento_novo') }}">➕ Novo orçamento</a>
+  </div>
+</div>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th style="width:90px">#</th>
+      <th>Cliente</th>
+      <th style="width:160px">Telefone</th>
+      <th style="width:220px">Moto</th>
+      <th style="width:120px">Data</th>
+      <th style="width:120px">Status</th>
+      <th style="width:140px">Total</th>
+      <th style="width:120px">Ações</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for o in orcamentos %}
+      <tr>
+        <td>{{ "%03d"|format(o.id) }}</td>
+        <td>{{ o.cliente_nome or '-' }}</td>
+        <td>{{ o.cliente_telefone or '-' }}</td>
+        <td>{{ (o.moto_modelo or '-') ~ (' / ' ~ o.moto_ano if o.moto_ano else '') }}</td>
+        <td>{{ o.data_criacao }}</td>
+        <td>{{ o.status|upper }}</td>
+        <td>R$ {{ '%.2f'|format(o.total or 0) }}</td>
+        <td>
+          <a class="btn" href="{{ url_for('orcamento_detalhe', id=o.id) }}">Abrir</a>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="empty">Nenhum orçamento cadastrado.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
