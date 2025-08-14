@@ -1,4 +1,4 @@
-# app.py — HG Moto Peças (com banco externo, exclusões, caixa diário e vendas varejo/atacado)
+# app.py — HG Moto Peças (Render/Postgres + init DB + movimentacoes robusto)
 import os
 import json
 from functools import wraps
@@ -34,15 +34,31 @@ db = SQLAlchemy(app)
 def hoje_iso():
     return date.today().strftime('%Y-%m-%d')
 
+# Garante criação de tabelas e usuário padrão ao subir no Render (gunicorn)
+@app.before_first_request
+def _init_db():
+    try:
+        db.create_all()
+        if not Usuario.query.filter_by(nome='HGMOTO').first():
+            db.session.add(Usuario(nome='HGMOTO', senha='hgmotopecas2025'))
+            db.session.commit()
+        app.logger.info("Banco inicializado/checado com sucesso.")
+    except Exception as e:
+        app.logger.error(f"Falha ao inicializar banco: {e}")
+
 # Fecha automaticamente qualquer caixa de dia anterior (pós 00:00)
 @app.before_request
 def fechar_caixas_antigos():
     hoje = hoje_iso()
-    abertos_antigos = Caixa.query.filter(Caixa.aberto == True, Caixa.data != hoje).all()
-    if abertos_antigos:
-        for c in abertos_antigos:
-            c.aberto = False
-        db.session.commit()
+    try:
+        abertos_antigos = Caixa.query.filter(Caixa.aberto == True, Caixa.data != hoje).all()
+        if abertos_antigos:
+            for c in abertos_antigos:
+                c.aberto = False
+            db.session.commit()
+    except Exception:
+        # Se o DB ainda não está pronto na 1ª request, deixa passar (será criado no before_first_request)
+        pass
 
 # -----------------------------
 # Models
@@ -227,7 +243,6 @@ def produto_excluir(id):
 @login_required
 def movimentacoes():
     tipo = request.args.get('tipo','venda')  # aba ativa
-    produtos = Produto.query.order_by(Produto.nome).all()
 
     if request.method == 'POST':
         tipo_form = request.form.get('tipo','venda')
@@ -269,11 +284,17 @@ def movimentacoes():
         flash('Movimentação registrada.', 'success')
         return redirect(url_for('movimentacoes', tipo=tipo_form))
 
-    # listas do dia
-    do_dia = Movimentacao.query.filter_by(data=hoje_iso()).all()
-    vendas = [m for m in do_dia if m.tipo=='venda']
-    entradas = [m for m in do_dia if m.tipo=='entrada']
-    saidas = [m for m in do_dia if m.tipo=='saida']
+    # GET — carrega produtos e movimentos do dia com proteção contra DB frio
+    try:
+        produtos = Produto.query.order_by(Produto.nome).all()
+        do_dia = Movimentacao.query.filter_by(data=hoje_iso()).all()
+        vendas = [m for m in do_dia if m.tipo=='venda']
+        entradas = [m for m in do_dia if m.tipo=='entrada']
+        saidas = [m for m in do_dia if m.tipo=='saida']
+    except Exception as e:
+        app.logger.error(f"Erro carregando Movimentações: {e}")
+        flash('Erro ao carregar movimentações. O banco pode estar inicializando, tente recarregar.', 'danger')
+        produtos, vendas, entradas, saidas = [], [], [], []
 
     return render_template('movimentacoes.html',
                            produtos=produtos, tipo=tipo,
@@ -359,7 +380,7 @@ def caixas_anteriores():
     return render_template('caixas_anteriores.html', caixas=resumo)
 
 # -----------------------------
-# Orçamentos (mantidos)
+# Orçamentos
 # -----------------------------
 @app.route('/orcamentos')
 @login_required
@@ -434,7 +455,7 @@ def orcamento_fechar(id):
     return redirect(url_for('orcamentos'))
 
 # -----------------------------
-# Init
+# Init (útil quando roda local com python app.py)
 # -----------------------------
 if __name__ == '__main__':
     with app.app_context():
