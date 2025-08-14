@@ -1,4 +1,4 @@
-# app.py — HG Moto Peças (Render/Postgres + init DB + movimentacoes robusto)
+# app.py — HG Moto Peças (Flask 3.x compat / Render Postgres / init DB no import)
 import os
 import json
 from functools import wraps
@@ -33,32 +33,6 @@ db = SQLAlchemy(app)
 
 def hoje_iso():
     return date.today().strftime('%Y-%m-%d')
-
-# Garante criação de tabelas e usuário padrão ao subir no Render (gunicorn)
-@app.before_first_request
-def _init_db():
-    try:
-        db.create_all()
-        if not Usuario.query.filter_by(nome='HGMOTO').first():
-            db.session.add(Usuario(nome='HGMOTO', senha='hgmotopecas2025'))
-            db.session.commit()
-        app.logger.info("Banco inicializado/checado com sucesso.")
-    except Exception as e:
-        app.logger.error(f"Falha ao inicializar banco: {e}")
-
-# Fecha automaticamente qualquer caixa de dia anterior (pós 00:00)
-@app.before_request
-def fechar_caixas_antigos():
-    hoje = hoje_iso()
-    try:
-        abertos_antigos = Caixa.query.filter(Caixa.aberto == True, Caixa.data != hoje).all()
-        if abertos_antigos:
-            for c in abertos_antigos:
-                c.aberto = False
-            db.session.commit()
-    except Exception:
-        # Se o DB ainda não está pronto na 1ª request, deixa passar (será criado no before_first_request)
-        pass
 
 # -----------------------------
 # Models
@@ -115,6 +89,30 @@ class Orcamento(db.Model):
     itens = db.Column(db.Text)  # JSON: [{id, nome, qtd, preco}, ...]
     total = db.Column(db.Float, default=0.0)
     forma_pagamento = db.Column(db.String(50))  # preenchido ao fechar
+
+# -----------------------------
+# Inicialização de DB (compatível Flask 3.x)
+# -----------------------------
+# Cria o schema e o usuário padrão assim que o módulo é importado (funciona no Render e local)
+with app.app_context():
+    db.create_all()
+    if not Usuario.query.filter_by(nome='HGMOTO').first():
+        db.session.add(Usuario(nome='HGMOTO', senha='hgmotopecas2025'))
+        db.session.commit()
+
+# Fecha automaticamente qualquer caixa de dia anterior (pós 00:00)
+@app.before_request
+def fechar_caixas_antigos():
+    hoje = hoje_iso()
+    try:
+        abertos_antigos = Caixa.query.filter(Caixa.aberto == True, Caixa.data != hoje).all()
+        if abertos_antigos:
+            for c in abertos_antigos:
+                c.aberto = False
+            db.session.commit()
+    except Exception:
+        # Se DB estiver indisponível por algum motivo no primeiro request, apenas ignora (DB já foi criado no import)
+        pass
 
 # -----------------------------
 # Auth helper
