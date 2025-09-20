@@ -568,12 +568,13 @@ def orcamento_imprimir(oid):
         itens = []
     return render_template("orcamento_print.html", o=o, itens=itens)
 
-# --------------- BOOT ---------------
+# --------------- BOOT (executa também no Render) ---------------
+with app.app_context():
+    ensure_schema()
+    if not Usuario.query.filter_by(nome="HGMOTO").first():
+        db.session.add(Usuario(nome="HGMOTO", senha="hgmotopecas2025"))
+        db.session.commit()
+
 if __name__ == "__main__":
-    with app.app_context():
-        ensure_schema()
-        if not Usuario.query.filter_by(nome="HGMOTO").first():
-            db.session.add(Usuario(nome="HGMOTO", senha="hgmotopecas2025"))
-            db.session.commit()
     port = int(os.environ.get("PORT", "5000"))
     app.run(host="0.0.0.0", port=port)
