@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Orçamentos Fechados</title>
+    <style>
+        body { background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+               background-size: cover; font-family: Arial, sans-serif; color:#fff; }
+        .container { max-width: 900px; margin: 90px auto 120px auto; background: rgba(0,0,0,0.55); padding:20px; border-radius:10px; }
+        .btn { display:inline-block; padding:10px 15px; background:#00c851; color:#fff; text-decoration:none; border-radius:8px; }
+        .btn:hover { background:#007e33; }
+        .footer-buttons { position: fixed; left:0; right:0; bottom:30px; display:flex; justify-content:center; gap:10px; }
+        table { width:100%; border-collapse:collapse; background:#fff; color:#000; margin-top: 15px; }
+        th, td { padding:10px; border-bottom:1px solid #ddd; }
+        th { background:#333; color:#fff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Orçamentos Fechados (Histórico)</h2>
+
+        <table>
+            <tr><th>#</th><th>Cliente</th><th>Moto</th><th>Data</th><th>Total</th><th>Ações</th></tr>
+            {% for o in orcamentos %}
+            <tr>
+                <td>{{ o.id }}</td>
+                <td>{{ o.cliente or '(sem nome)' }}</td>
+                <td>{{ o.moto or '-' }}</td>
+                <td>{{ o.data }}</td>
+                <td>R$ {{ '%.2f'|format(o.total or 0) }}</td>
+                <td><a class="btn" href="{{ url_for('orcamento_imprimir', oid=o.id) }}" target="_blank">Imprimir</a></td>
+            </tr>
+            {% endfor %}
+            {% if not orcamentos %}
+            <tr><td colspan="6">Nenhum orçamento fechado.</td></tr>
+            {% endif %}
+        </table>
+    </div>
+
+    <div class="footer-buttons">
+        <a class="btn" href="{{ url_for('orcamentos_list') }}">Abertos</a>
+        <a class="btn" href="{{ url_for('index') }}">Menu</a>
+    </div>
+</body>
+</html>

@@ -2,73 +2,53 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Relatórios Financeiros</title>
+    <title>Relatórios</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        body {
-            background-image: url("{{ url_for('static', filename='internal_bg.jpg') }}");
-            background-size: cover;
-            background-position: center;
-            color: white;
-        }
-        .container { margin-top: 80px; }
-        table { width: 100%; background-color: rgba(0, 0, 0, 0.8); }
-        th, td { padding: 10px; text-align: left; }
+        body { background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+               background-size: cover; font-family: Arial, sans-serif; color:#fff; }
+        .container { max-width: 900px; margin: 90px auto 120px auto; background: rgba(0,0,0,0.55); padding:20px; border-radius:10px; }
+        table { width:100%; border-collapse: collapse; background:#fff; color:#000; margin-top:12px; }
+        th, td { padding:10px; border-bottom:1px solid #ddd; }
+        th { background:#333; color:#fff; }
+        .btn { display:inline-block; padding:10px 15px; background:#00c851; color:#fff; text-decoration:none; border-radius:8px; }
+        .btn:hover { background:#007e33; }
+        .footer-buttons { position: fixed; left:0; right:0; bottom:30px; display:flex; justify-content:center; gap:10px; }
     </style>
 </head>
 <body>
-<div class="container">
-    <h2>📊 Relatório Financeiro Automático</h2>
-    <a href="{{ url_for('index') }}" class="btn">Menu</a>
+    <div class="container">
+        <h2>Relatórios</h2>
 
-    {% if saldo_inicial is defined %}
-    <p>📅 PERÍODO: {{ caixas[-1].data }}</p>
-    <p>💰 SALDO INICIAL: R$ {{ saldo_inicial }}</p>
-    <p>🛒 TOTAL DE VENDAS: R$ {{ total_vendas }}</p>
-    <p>➖ TOTAL DE DESPESAS: R$ {{ total_despesas }}</p>
-    <p>💵 SALDO FINAL: R$ {{ saldo_final }}</p>
+        <p><strong>Saldo Inicial (soma histórica):</strong> R$ {{ saldo_inicial }}</p>
+        <p><strong>Total de Vendas:</strong> R$ {{ total_vendas }}</p>
+        <p><strong>Total de Despesas (saídas):</strong> R$ {{ total_despesas }}</p>
+        <p><strong>Saldo Final:</strong> R$ {{ saldo_final }}</p>
 
-    <h3>💳 Vendas por Forma de Pagamento</h3>
-    <ul>
-        {% for forma, valor in vendas_por_forma.items() %}
-            <li>{{ forma }}: R$ {{ valor }}</li>
-        {% endfor %}
-    </ul>
+        <div style="margin-top:12px;">
+            <a class="btn" href="{{ url_for('relatorio_periodo', periodo='semanal') }}">Relatório Semanal</a>
+            <a class="btn" href="{{ url_for('relatorio_periodo', periodo='mensal') }}">Relatório Mensal</a>
+        </div>
 
-    <h3>🏆 Top 3 Produtos Vendidos</h3>
-    <ol>
-        {% for nome, qtd in top_produtos %}
-            <li>{{ nome }} — {{ qtd }} unidades</li>
-        {% endfor %}
-    </ol>
+        <h3 style="margin-top:18px;">Comparativo Mensal</h3>
+        <table>
+            <tr><th>Mês</th><th>Vendas</th><th>Despesas</th><th>Lucro</th></tr>
+            {% for m in comparativo %}
+            <tr>
+                <td>{{ m.mes }}</td>
+                <td>R$ {{ m.vendas }}</td>
+                <td>R$ {{ m.despesas }}</td>
+                <td>R$ {{ m.lucro }}</td>
+            </tr>
+            {% endfor %}
+            {% if not comparativo %}
+            <tr><td colspan="4">Sem dados para comparar.</td></tr>
+            {% endif %}
+        </table>
+    </div>
 
-    <h3>💸 Despesas</h3>
-    <ul>
-        {% for d in despesas %}
-            <li>{{ d.descricao }} — R$ {{ d.valor }}</li>
-        {% endfor %}
-    </ul>
-
-    <h3>📆 Comparativo Mensal</h3>
-    <table border="1">
-        <tr>
-            <th>Mês</th>
-            <th>Vendas</th>
-            <th>Despesas</th>
-            <th>Lucro</th>
-        </tr>
-        {% for mes in comparativo %}
-        <tr>
-            <td>{{ mes.mes }}</td>
-            <td>R$ {{ mes.vendas }}</td>
-            <td>R$ {{ mes.despesas }}</td>
-            <td>R$ {{ mes.lucro }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    {% else %}
-        <p><strong>Nenhum dado encontrado. Cadastre um caixa para gerar relatórios.</strong></p>
-    {% endif %}
-</div>
+    <div class="footer-buttons">
+        <a class="btn" href="{{ url_for('index') }}">Menu</a>
+    </div>
 </body>
 </html>

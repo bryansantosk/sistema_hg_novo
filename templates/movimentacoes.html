@@ -1,128 +1,108 @@
-{% extends 'base.html' %}
-{% block title %}Movimentos{% endblock %}
-{% block content %}
-<div class="tabs">
-  <a class="tab {{ 'active' if tipo=='venda' else '' }}" href="{{ url_for('movimentacoes', tipo='venda') }}">Vendas</a>
-  <a class="tab {{ 'active' if tipo=='entrada' else '' }}" href="{{ url_for('movimentacoes', tipo='entrada') }}">Entradas</a>
-  <a class="tab {{ 'active' if tipo=='saida' else '' }}" href="{{ url_for('movimentacoes', tipo='saida') }}">Saídas</a>
-</div>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Movimentações</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+            background-size: cover; font-family: Arial, sans-serif; color: #fff;
+        }
+        .container { max-width: 980px; margin: 90px auto 120px auto; background-color: rgba(0,0,0,0.6); padding: 20px; border-radius: 10px; }
+        h2, h3 { margin-top: 0; }
+        table { width:100%; border-collapse: collapse; margin-top: 10px; background-color: #fff; color: #000; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; }
+        th { background:#333; color:#fff; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .btn { display:inline-block; padding:10px 15px; border-radius:8px; background:#00c851; color:#fff; text-decoration:none; }
+        .btn:hover { background:#007e33; }
+        .botoes { margin-top: 15px; display:flex; gap:10px; flex-wrap:wrap; }
+        .footer-buttons { position: fixed; left:0; right:0; bottom:30px; display:flex; justify-content:center; gap:10px; }
+        .box { background: rgba(255,255,255,0.06); padding:10px; border-radius:8px; }
+        input[type="number"], input[type="text"], input[type="date"] { width: 100%; padding: 8px; border-radius: 6px; border: none; margin-top: 6px; }
+        select { width: 100%; padding: 8px; border-radius: 6px; border: none; margin-top: 6px; }
+        form { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Movimentações do Dia</h2>
+        <form method="get" class="box">
+            <label>Data:</label>
+            <input type="date" name="data" value="{{ data }}">
+            <button class="btn" type="submit">Ver</button>
+        </form>
 
-{% if tipo=='venda' %}
-<div class="card">
-  <h2>Nova venda</h2>
-  <form method="post" onsubmit="return montarItens()">
-    <input type="hidden" name="tipo" value="venda">
-    <input type="hidden" name="itens" id="itens_json">
-    <div class="row">
-      <select id="prod_sel">
-        {% for p in produtos %}
-          <option
-            value="{{ p.id }}"
-            data-varejo="{{ p.preco_varejo|default(0, true) }}"
-            data-atacado="{{ p.preco_atacado|default(0, true) }}"
-          >{{ "%03d"|format(p.id) }} — {{ p.nome }}</option>
-        {% endfor %}
-      </select>
+        <div class="grid">
+            <div class="box">
+                <h3>Vendas</h3>
+                <table>
+                    <tr><th>ID</th><th>Total</th></tr>
+                    {% for v in vendas %}
+                    <tr>
+                        <td>#{{ v.id }}</td>
+                        <td>R$ {{ '%.2f'|format(v.total) }}</td>
+                    </tr>
+                    {% endfor %}
+                    {% if not vendas %}<tr><td colspan="2">Sem vendas.</td></tr>{% endif %}
+                    <tr><th style="text-align:right">Total</th><th>R$ {{ '%.2f'|format(total_vendas) }}</th></tr>
+                </table>
+                <div class="botoes">
+                    <a class="btn" href="{{ url_for('vendas') }}">Registrar Venda</a>
+                </div>
+            </div>
 
-      <select id="tipo_preco">
-        <option value="varejo">Varejo</option>
-        <option value="atacado">Atacado</option>
-      </select>
+            <div class="box">
+                <h3>Entradas</h3>
+                <table>
+                    <tr><th>Descrição</th><th>Valor</th></tr>
+                    {% for e in entradas %}
+                    <tr><td>{{ e.descricao }}</td><td>R$ {{ '%.2f'|format(e.valor) }}</td></tr>
+                    {% endfor %}
+                    {% if not entradas %}<tr><td colspan="2">Sem entradas.</td></tr>{% endif %}
+                    <tr><th style="text-align:right">Total</th><th>R$ {{ '%.2f'|format(total_entradas) }}</th></tr>
+                </table>
 
-      <div class="qty">
-        <button type="button" onclick="dec()">−</button>
-        <input id="qtd" value="1">
-        <button type="button" onclick="inc()">+</button>
-      </div>
-      <button class="btn" type="button" onclick="addItem()">Adicionar</button>
+                <form method="post" action="{{ url_for('nova_movimentacao') }}">
+                    <input type="hidden" name="tipo" value="entrada">
+                    <input type="hidden" name="data" value="{{ data }}">
+                    <label>Descrição</label><input type="text" name="descricao" required>
+                    <label>Valor</label><input type="number" step="0.01" name="valor" required>
+                    <div class="botoes">
+                        <button class="btn" type="submit">Adicionar Entrada</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="box" style="margin-top:20px;">
+            <h3>Saídas</h3>
+            <table>
+                <tr><th>Descrição</th><th>Valor</th></tr>
+                {% for s in saidas %}
+                <tr><td>{{ s.descricao }}</td><td>R$ {{ '%.2f'|format(s.valor) }}</td></tr>
+                {% endfor %}
+                {% if not saidas %}<tr><td colspan="2">Sem saídas.</td></tr>{% endif %}
+                <tr><th style="text-align:right">Total</th><th>R$ {{ '%.2f'|format(total_saidas) }}</th></tr>
+            </table>
+
+            <form method="post" action="{{ url_for('nova_movimentacao') }}">
+                <input type="hidden" name="tipo" value="saida">
+                <input type="hidden" name="data" value="{{ data }}">
+                <label>Descrição</label><input type="text" name="descricao" required>
+                <label>Valor</label><input type="number" step="0.01" name="valor" required>
+                <div class="botoes">
+                    <button class="btn" type="submit">Adicionar Saída</button>
+                </div>
+            </form>
+        </div>
     </div>
 
-    <table class="table" id="tabela">
-      <thead><tr><th>Cód</th><th>Produto</th><th>Qtd</th><th>Preço</th><th>Total</th><th></th></tr></thead>
-      <tbody></tbody>
-    </table>
-
-    <div class="right">
-      <label>Total</label>
-      <input name="valor" id="total" readonly value="0">
-      <select name="forma_pagamento">
-        <option>Dinheiro</option><option>Cartão</option><option>Pix</option>
-      </select>
-      <input name="observacoes" placeholder="Observações">
-      <button class="btn primary">Finalizar venda</button>
+    <div class="footer-buttons">
+        <a class="btn" href="{{ url_for('caixa') }}">Ir ao Caixa</a>
+        <a class="btn" href="{{ url_for('caixas_anteriores') }}">Caixas Anteriores</a>
+        <a class="btn" href="{{ url_for('index') }}">Menu</a>
     </div>
-  </form>
-</div>
-
-<script>
-let lista = [];
-function inc(){ document.getElementById('qtd').value = (+document.getElementById('qtd').value||1)+1 }
-function dec(){ let v=(+document.getElementById('qtd').value||1)-1; document.getElementById('qtd').value = v<1?1:v }
-
-function addItem(){
-  const sel = document.getElementById('prod_sel');
-  const id = +sel.value;
-  const nome = sel.options[sel.selectedIndex].text.split(' — ').slice(1).join(' — ');
-  const tipo = document.getElementById('tipo_preco').value;
-  const varejo = +sel.options[sel.selectedIndex].dataset.varejo || 0;
-  const atacado = +sel.options[sel.selectedIndex].dataset.atacado || 0;
-  const preco = (tipo === 'atacado') ? atacado : varejo;
-  const qtd = +document.getElementById('qtd').value || 1;
-  lista.push({id, nome, qtd, preco});
-  render();
-}
-function render(){
-  const tbody = document.querySelector('#tabela tbody');
-  tbody.innerHTML = '';
-  let tot = 0;
-  lista.forEach((it, i)=>{
-    const parcial = it.qtd*it.preco;
-    tot += parcial;
-    const linha = document.createElement('tr');
-    linha.innerHTML = `<td>${String(it.id).padStart(3,'0')}</td><td>${it.nome}</td><td>${it.qtd}</td><td>${it.preco.toFixed(2)}</td><td>${parcial.toFixed(2)}</td>
-      <td><button class="btn danger" type="button" onclick="rem(${i})">x</button></td>`;
-    tbody.appendChild(linha);
-  });
-  document.getElementById('total').value = tot.toFixed(2);
-}
-function rem(i){ lista.splice(i,1); render(); }
-function montarItens(){
-  document.getElementById('itens_json').value = JSON.stringify(lista);
-  return true;
-}
-</script>
-
-{% elif tipo=='entrada' %}
-<div class="card narrow">
-  <h2>Entrada manual</h2>
-  <form method="post">
-    <input type="hidden" name="tipo" value="entrada">
-    <label>Valor</label>
-    <input name="valor" type="number" step="0.01" required>
-    <label>Observações</label>
-    <input name="observacoes">
-    <button class="btn primary">Lançar entrada</button>
-  </form>
-</div>
-
-{% else %}
-<div class="card narrow">
-  <h2>Saída manual</h2>
-  <form method="post">
-    <input type="hidden" name="tipo" value="saida">
-    <label>Valor</label>
-    <input name="valor" type="number" step="0.01" required>
-    <label>Observações</label>
-    <input name="observacoes">
-    <button class="btn primary">Lançar saída</button>
-  </form>
-</div>
-{% endif %}
-
-<div class="card">
-  <h3>Movimentações do dia</h3>
-  {% if vendas %}<p><strong>Vendas:</strong> {{ vendas|length }}</p>{% endif %}
-  {% if entradas %}<p><strong>Entradas:</strong> {{ entradas|length }}</p>{% endif %}
-  {% if saidas %}<p><strong>Saídas:</strong> {{ saidas|length }}</p>{% endif %}
-</div>
-{% endblock %}
+</body>
+</html>

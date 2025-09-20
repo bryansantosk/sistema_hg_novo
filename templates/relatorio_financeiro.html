@@ -2,138 +2,49 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Relatório Financeiro</title>
+    <title>{{ titulo }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f8f8f8;
-            margin: 0;
-            padding: 0;
-        }
-        .container {
-            max-width: 900px;
-            margin: 40px auto;
-            background: #fff;
-            padding: 30px 40px;
-            border-radius: 12px;
-            box-shadow: 0 0 10px #ccc;
-        }
-        h1, h2 {
-            color: #333;
-        }
-        ul {
-            padding-left: 20px;
-        }
-        .grafico {
-            margin: 20px 0;
-        }
-        .exportar {
-            margin-top: 30px;
-        }
-        .exportar a {
-            margin-right: 10px;
-            padding: 10px 20px;
-            background-color: #0055aa;
-            color: white;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: bold;
-        }
-        table {
-            margin-top: 10px;
-            border-collapse: collapse;
-            width: 100%;
-        }
-        th, td {
-            padding: 8px;
-            border: 1px solid #ccc;
-        }
-        th {
-            background: #eee;
-        }
-        .navegacao {
-            display: flex;
-            justify-content: flex-start;
-            gap: 15px;
-            padding: 15px 40px;
-            background: #eee;
-        }
-        .btn-voltar, .btn-menu {
-            text-decoration: none;
-            color: #0055aa;
-            font-weight: bold;
-        }
+        body { background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+               background-size: cover; font-family: Arial, sans-serif; color:#fff; }
+        .container { max-width: 780px; margin: 90px auto 120px auto; background: rgba(0,0,0,0.55); padding:20px; border-radius:10px; }
+        .info { background: rgba(255,255,255,0.06); padding:10px; border-radius:8px; }
+        .metricas { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-top:12px; }
+        .box { background: rgba(255,255,255,0.06); padding:10px; border-radius:8px; }
+        .valor { font-size: 22px; font-weight: bold; }
+        .btn { display:inline-block; padding:10px 15px; background:#00c851; color:#fff; text-decoration:none; border-radius:8px; }
+        .btn:hover { background:#007e33; }
+        .footer-buttons { position: fixed; left:0; right:0; bottom:30px; display:flex; justify-content:center; gap:10px; }
     </style>
 </head>
 <body>
-
-    <div class="navegacao">
-        <a href="javascript:history.back()" class="btn-voltar">🔙 Voltar</a>
-        <a href="{{ url_for('index') }}" class="btn-menu">🏠 Menu</a>
-    </div>
-
     <div class="container">
-        <h1>📊 Relatório Financeiro</h1>
-        <p><strong>Período:</strong> {{ data_inicio }} a {{ data_fim }}</p>
+        <h2>{{ titulo }}</h2>
+        <div class="info">Período: <strong>{{ data_inicio }}</strong> a <strong>{{ data_fim }}</strong></div>
 
-        <h2>💰 Resumo:</h2>
-        <ul>
-            <li>Saldo Inicial: <strong>R$ {{ saldo_inicial }}</strong></li>
-            <li>Total de Vendas: <strong>R$ {{ total_vendas }}</strong></li>
-            <li>Total de Despesas: <strong>R$ {{ total_despesas }}</strong></li>
-            <li>Saldo Final: <strong>R$ {{ saldo_final }}</strong></li>
-        </ul>
-
-        <h2>📈 Vendas por Forma de Pagamento:</h2>
-        <ul>
-            {% for forma, valor in formas_pagamento.items() %}
-                <li>{{ forma }}: R$ {{ '%.2f' % valor }}</li>
-            {% endfor %}
-        </ul>
-
-        <h2>🏆 Top 3 Produtos Vendidos:</h2>
-        <ul>
-            {% for nome, qtd, valor in top_produtos %}
-                <li>{{ nome }}: {{ qtd }} unidades (R$ {{ '%.2f' % valor }})</li>
-            {% endfor %}
-        </ul>
-
-        <h2>📌 Despesas Detalhadas:</h2>
-        <ul>
-            {% for d in despesas %}
-                <li>{{ d.descricao }} — R$ {{ '%.2f' % d.valor }}</li>
-            {% endfor %}
-        </ul>
-
-        <h2>📆 Histórico Mensal:</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Mês</th>
-                    <th>Vendas</th>
-                    <th>Despesas</th>
-                    <th>Lucro</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for mes, vendas, despesas, lucro in historico %}
-                    <tr>
-                        <td>{{ mes }}</td>
-                        <td>R$ {{ '%.2f' % vendas }}</td>
-                        <td>R$ {{ '%.2f' % despesas }}</td>
-                        <td><strong>R$ {{ '%.2f' % lucro }}</strong></td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <div class="exportar">
-            <a href="{{ url_for('exportar_pdf') }}">📄 PDF</a>
-            <a href="{{ url_for('exportar_excel') }}">📊 Excel</a>
-            <a href="{{ url_for('enviar_email') }}">📧 Enviar por E-mail</a>
+        <div class="metricas">
+            <div class="box">
+                <div>Entrou</div>
+                <div class="valor">R$ {{ entrou }}</div>
+            </div>
+            <div class="box">
+                <div>Saiu</div>
+                <div class="valor">R$ {{ saiu }}</div>
+            </div>
+            <div class="box">
+                <div>Vendas</div>
+                <div class="valor">R$ {{ vendas }}</div>
+            </div>
+            <div class="box">
+                <div>Lucro</div>
+                <div class="valor">R$ {{ lucro }}</div>
+            </div>
         </div>
     </div>
 
+    <div class="footer-buttons">
+        <a class="btn" href="{{ url_for('relatorios') }}">Voltar</a>
+        <a class="btn" href="{{ url_for('index') }}">Menu</a>
+    </div>
 </body>
 </html>

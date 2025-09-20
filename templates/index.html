@@ -1,10 +1,35 @@
-{% extends 'base.html' %}
-{% block title %}Início - HG{% endblock %}
-{% block content %}
-<div class="grid quick">
-  <a class="tile" href="{{ url_for('produtos') }}">Produtos</a>
-  <a class="tile" href="{{ url_for('movimentacoes') }}">Movimentos</a>
-  <a class="tile" href="{{ url_for('caixa') }}">Caixa</a>
-  <a class="tile" href="{{ url_for('orcamentos') }}">Orçamentos</a>
-</div>
-{% endblock %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Menu Principal</title>
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; font-family: Arial, sans-serif; }
+        body {
+            background: url('{{ url_for("static", filename="logo.png") }}') no-repeat center center fixed;
+            background-size: cover;
+        }
+        .footer { position: fixed; left: 0; right: 0; bottom: 30px; display: flex; justify-content: center; }
+        .botoes { display: flex; gap: 12px; flex-wrap: wrap; max-width: 1000px; justify-content: center; }
+        .botoes a {
+            display: inline-block; min-width: 200px; text-align: center;
+            padding: 14px 18px; background: #00c851; color: #fff; text-decoration: none;
+            border-radius: 12px; font-size: 18px; font-weight: bold;
+        }
+        .botoes a:hover { background: #007e33; }
+    </style>
+</head>
+<body>
+    <div class="footer">
+        <div class="botoes">
+            <a href="/produtos">Produtos</a>
+            <a href="/vendas">Vendas</a>
+            <a href="/orcamentos">Orçamentos</a>
+            <a href="/movimentacoes">Movimentações</a>
+            <a href="/caixa">Caixa</a>
+            <a href="/relatorios">Relatórios</a>
+            <a href="/logout">Sair</a>
+        </div>
+    </div>
+</body>
+</html>

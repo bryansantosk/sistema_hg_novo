@@ -1,18 +1,70 @@
-{% extends "base.html" %}
-{% block title %}Produtos{% endblock %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Produtos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+            background-size: cover; font-family: Arial, sans-serif; color: #fff;
+        }
+        .container { max-width: 980px; margin: 90px auto; background: rgba(0,0,0,0.55); padding: 20px; border-radius: 10px; }
+        .btn { display:inline-block; padding:10px 15px; background:#00c851; color:#fff; text-decoration:none; border-radius:8px; margin-right: 10px; }
+        .btn:hover { background:#007e33; }
+        table { width:100%; border-collapse: collapse; margin-top: 15px; background:#fff; color:#000; }
+        th, td { padding:10px; border-bottom:1px solid #ddd; }
+        th { background:#333; color:#fff; }
+        .footer-buttons { position: fixed; left:0; right:0; bottom: 30px; display:flex; justify-content:center; gap: 10px; }
+        .filtro { margin-top: 10px; background: rgba(255,255,255,0.06); padding:10px; border-radius:8px; }
+        input[type="text"] { width:100%; padding:10px; border-radius:6px; border:none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Produtos</h2>
 
-{% block content %}
-<div class="page-head">
-  <h1>Produtos</h1>
-  <div class="actions">
-    <a class="btn" href="{{ url_for('categorias') }}">➕ Nova categoria</a>
-    <a class="btn" href="{{ url_for('novo_produto') }}">➕ Novo produto</a>
-    <a class="btn btn-secondary" href="{{ url_for('produtos_ver_todos') }}">📄 Ver todos</a>
-  </div>
-</div>
+        <form method="get" class="filtro">
+            <label>Pesquisar por código ou nome:</label>
+            <input type="text" name="q" value="{{ q or '' }}" placeholder="Ex.: 001 ou Pneu...">
+        </form>
 
-<form class="search-row" method="get" action="{{ url_for('produtos_ver_todos') }}">
-  <input type="text" name="q" placeholder="Buscar por código (001) ou nome…"/>
-  <button class="btn">Buscar</button>
-</form>
-{% endblock %}
+        {% if ver %}
+        <table>
+            <tr>
+                <th>CÓDIGO</th>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Valor de Custo</th>
+                <th>Valor de Varejo</th>
+                <th>Valor de Atacado</th>
+                <th>Estoque</th>
+            </tr>
+            {% for p in produtos %}
+            <tr>
+                <td>{{ p.codigo or '-' }}</td>
+                <td>{{ p.nome }}</td>
+                <td>{{ p.categoria.nome if p.categoria else '-' }}</td>
+                <td>R$ {{ '%.2f'|format(p.custo or 0) }}</td>
+                <td>R$ {{ '%.2f'|format(p.preco_varejo or 0) }}</td>
+                <td>R$ {{ '%.2f'|format(p.preco_atacado or 0) }}</td>
+                <td>{{ p.estoque or 0 }}</td>
+            </tr>
+            {% endfor %}
+            {% if not produtos %}
+            <tr><td colspan="7">Nenhum produto encontrado.</td></tr>
+            {% endif %}
+        </table>
+        {% else %}
+        <p style="margin-top:12px;">Use a busca acima ou clique em <strong>Ver Todos</strong> para listar os produtos.</p>
+        {% endif %}
+    </div>
+
+    <div class="footer-buttons">
+        <a class="btn" href="{{ url_for('novo_produto') }}">Criar Produto</a>
+        <a class="btn" href="{{ url_for('categorias') }}">Criar Categoria</a>
+        <a class="btn" href="{{ url_for('produtos_ver_todos') }}">Ver Todos</a>
+        <a class="btn" href="{{ url_for('index') }}">Menu</a>
+    </div>
+</body>
+</html>

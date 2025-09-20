@@ -1,42 +1,50 @@
-# app.py — HG Moto Peças (Flask 3.x compat / Render Postgres / init DB no import)
+# app.py — HG Moto Peças (com ORÇAMENTOS)
+# Mantém layout; adiciona lógica/rotas. Flask 3.x + SQLAlchemy 2.x
+
 import os
 import json
-from functools import wraps
-from datetime import date
+from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
+
 from flask import (
-    Flask, render_template, request, redirect,
-    url_for, session, flash
+    Flask, render_template, request, redirect, url_for,
+    session, flash, jsonify
 )
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import text, inspect
 
-# -----------------------------
-# App & DB config
-# -----------------------------
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-INSTANCE_PATH = os.path.join(BASE_DIR, 'instance')
+INSTANCE_PATH = os.path.join(BASE_DIR, "instance")
 os.makedirs(INSTANCE_PATH, exist_ok=True)
 
 app = Flask(__name__, instance_path=INSTANCE_PATH)
-app.secret_key = os.environ.get('SECRET_KEY', 'chave_super_secreta')
+app.secret_key = os.environ.get("SECRET_KEY", "chave_super_secreta")
 
-# Render Postgres via DATABASE_URL, fallback SQLite
-DATABASE_URL = os.environ.get('DATABASE_URL')
+def normalize_db_url(url: str) -> str:
+    if not url:
+        return url
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql://") and "+psycopg2" not in url:
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
+DATABASE_URL = normalize_db_url(os.environ.get("DATABASE_URL") or os.environ.get("DATABASE_INTERNAL_URL"))
 if DATABASE_URL:
-    if DATABASE_URL.startswith("postgres://"):
-        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
 else:
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(INSTANCE_PATH, 'banco.db')
-
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(INSTANCE_PATH, "banco.db")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
-def hoje_iso():
-    return date.today().strftime('%Y-%m-%d')
+# Timezone fixo
+TZ = ZoneInfo("America/Sao_Paulo")
+def hoje_data():
+    return datetime.now(TZ).date()
+def hoje_str():
+    return hoje_data().strftime("%Y-%m-%d")
 
-# -----------------------------
-# Models
-# -----------------------------
+# ----------------- MODELOS -----------------
 class Usuario(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(80), unique=True, nullable=False)
@@ -44,422 +52,528 @@ class Usuario(db.Model):
 
 class Categoria(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    nome = db.Column(db.String(120), unique=True, nullable=False)
+    nome = db.Column(db.String(80), unique=True, nullable=False)
 
 class Produto(db.Model):
-    id = db.Column(db.Integer, primary_key=True)   # código
-    nome = db.Column(db.String(200), nullable=False)
-    custo = db.Column(db.Float, default=0.0)
-    preco_varejo = db.Column(db.Float, default=0.0)
-    preco_atacado = db.Column(db.Float, default=0.0)
-    estoque = db.Column(db.Integer, default=0)
-    categoria_id = db.Column(db.Integer, db.ForeignKey('categoria.id'), nullable=True)
-    categoria = db.relationship('Categoria')
-
-class Movimentacao(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    data = db.Column(db.String(20), nullable=False)  # YYYY-MM-DD
-    tipo = db.Column(db.String(20), nullable=False)  # 'venda' | 'entrada' | 'saida'
-    valor = db.Column(db.Float, default=0.0)
-    forma_pagamento = db.Column(db.String(50))       # só em 'venda'
+    codigo = db.Column(db.String(6), unique=True)  # 001, 002...
+    nome = db.Column(db.String(120), nullable=False)
+    custo = db.Column(db.Float, nullable=False, default=0.0)
+    preco_varejo = db.Column(db.Float, nullable=False, default=0.0)
+    preco_atacado = db.Column(db.Float, nullable=False, default=0.0)
+    estoque = db.Column(db.Integer, default=0)
+    categoria_id = db.Column(db.Integer, db.ForeignKey("categoria.id"), nullable=True)  # opcional
+    categoria = db.relationship("Categoria")
+
+class Venda(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    data = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD
+    forma_pagamento = db.Column(db.String(50))
     observacoes = db.Column(db.Text)
-    itens = db.Column(db.Text)  # JSON [{id, nome, qtd, preco}, ...] só em 'venda'
+    total = db.Column(db.Float, nullable=False, default=0.0)
+    itens = db.Column(db.Text)  # JSON
 
 class Caixa(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    data = db.Column(db.String(20), unique=True)     # YYYY-MM-DD
+    data = db.Column(db.String(10), unique=True)  # YYYY-MM-DD
     saldo_inicial = db.Column(db.Float, default=0.0)
-    aberto = db.Column(db.Boolean, default=True)
+    aberto = db.Column(db.Boolean, default=False)
 
 class Lancamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    data = db.Column(db.String(20))
-    tipo = db.Column(db.String(10))  # 'entrada' | 'saida'
+    data = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD
+    tipo = db.Column(db.String(10))  # 'entrada' ou 'saida'
     descricao = db.Column(db.String(200))
     valor = db.Column(db.Float, default=0.0)
 
+# >>> NOVO: ORÇAMENTO <<<
 class Orcamento(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    data_criacao = db.Column(db.String(20), default=lambda: hoje_iso())
-    cliente_nome = db.Column(db.String(200))
-    cliente_telefone = db.Column(db.String(50))
-    moto_modelo = db.Column(db.String(120))
-    moto_ano = db.Column(db.String(20))
-    status = db.Column(db.String(20), default='aberto')  # 'aberto' | 'fechado'
-    itens = db.Column(db.Text)  # JSON: [{id, nome, qtd, preco}, ...]
+    status = db.Column(db.String(10), default="aberto")  # 'aberto' | 'fechado'
+    data = db.Column(db.String(10), nullable=False)  # YYYY-MM-DD
+    cliente = db.Column(db.String(120), default="")
+    moto = db.Column(db.String(120), default="")
+    servico = db.Column(db.String(120), default="")
+    garantia = db.Column(db.String(50), default="90 DIAS GARANTIA")
+    forma_pagamento = db.Column(db.String(50))
+    itens = db.Column(db.Text, default="[]")  # JSON: [{codigo, nome, qtd, valor_unit, subtotal}]
     total = db.Column(db.Float, default=0.0)
-    forma_pagamento = db.Column(db.String(50))  # preenchido ao fechar
 
-# -----------------------------
-# Inicialização de DB (compatível Flask 3.x)
-# -----------------------------
-# Cria o schema e o usuário padrão assim que o módulo é importado (funciona no Render e local)
-with app.app_context():
+# --------------- MIGRAÇÃO LEVE ---------------
+def ensure_schema():
     db.create_all()
-    if not Usuario.query.filter_by(nome='HGMOTO').first():
-        db.session.add(Usuario(nome='HGMOTO', senha='hgmotopecas2025'))
-        db.session.commit()
+    insp = inspect(db.engine)
 
-# Fecha automaticamente qualquer caixa de dia anterior (pós 00:00)
-@app.before_request
-def fechar_caixas_antigos():
-    hoje = hoje_iso()
-    try:
-        abertos_antigos = Caixa.query.filter(Caixa.aberto == True, Caixa.data != hoje).all()
-        if abertos_antigos:
-            for c in abertos_antigos:
-                c.aberto = False
+    # coluna codigo em produto
+    if insp.has_table("produto"):
+        cols = [c["name"] for c in insp.get_columns("produto")]
+        if "codigo" not in cols:
+            try:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE produto ADD COLUMN codigo VARCHAR(6);'))
+            except Exception:
+                pass
+
+    # preencher códigos faltantes
+    if insp.has_table("produto"):
+        produtos_sem_codigo = Produto.query.filter((Produto.codigo.is_(None)) | (Produto.codigo == "")).all()
+        if produtos_sem_codigo:
+            existentes = [int(p.codigo) for p in Produto.query.filter(Produto.codigo.is_not(None)).all() if (p.codigo or "").isdigit()]
+            sequencia = max(existentes) if existentes else 0
+            for p in produtos_sem_codigo:
+                sequencia += 1
+                p.codigo = f"{sequencia:03d}"
             db.session.commit()
-    except Exception:
-        # Se DB estiver indisponível por algum motivo no primeiro request, apenas ignora (DB já foi criado no import)
-        pass
 
-# -----------------------------
-# Auth helper
-# -----------------------------
-def login_required(f):
-    @wraps(f)
-    def wrap(*args, **kwargs):
-        if 'usuario_id' not in session:
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return wrap
+# --------------- LOGIN ---------------
+def login_required(view):
+    from functools import wraps
+    @wraps(view)
+    def wrapper(*args, **kwargs):
+        if not session.get("user_id"):
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+    return wrapper
 
-# -----------------------------
-# Auth / Home
-# -----------------------------
-@app.route('/login', methods=['GET','POST'])
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if request.method == 'POST':
-        nome = request.form.get('nome','').strip()
-        senha = request.form.get('senha','').strip()
-        u = Usuario.query.filter_by(nome=nome, senha=senha).first()
-        if u:
-            session['usuario_id'] = u.id
-            return redirect(url_for('index'))
-        flash('Credenciais inválidas', 'danger')
-    return render_template('login.html')
+    if request.method == "POST":
+        nome = request.form.get("nome","").strip()
+        senha = request.form.get("senha","").strip()
+        user = Usuario.query.filter_by(nome=nome, senha=senha).first()
+        if user:
+            session["user_id"] = user.id
+            return redirect(url_for("index"))
+        flash("Credenciais inválidas", "danger")
+    return render_template("login.html")
 
-@app.route('/logout')
+@app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for('login'))
+    return redirect(url_for("login"))
 
-@app.route('/')
+# --------------- VIRADA 00:00 ---------------
+@app.before_request
+def virada_automatica():
+    try:
+        hoje = hoje_str()
+        ontem = (hoje_data() - timedelta(days=1)).strftime("%Y-%m-%d")
+        cx_ontem = Caixa.query.filter_by(data=ontem, aberto=True).first()
+        if cx_ontem:
+            cx_ontem.aberto = False
+            db.session.commit()
+        if not Caixa.query.filter_by(data=hoje).first():
+            db.session.add(Caixa(data=hoje, saldo_inicial=0.0, aberto=False))
+            db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+# --------------- ROTAS ----------------
+@app.route("/")
 @login_required
 def index():
-    return render_template('index.html')
+    return render_template("index.html")
 
-# -----------------------------
-# Categorias
-# -----------------------------
-@app.route('/categorias', methods=['GET','POST'])
-@login_required
-def categorias():
-    if request.method == 'POST':
-        nome = request.form.get('nome','').strip()
-        if nome:
-            if not Categoria.query.filter_by(nome=nome).first():
-                db.session.add(Categoria(nome=nome))
-                db.session.commit()
-            else:
-                flash('Categoria já existe.', 'warning')
-        return redirect(url_for('categorias'))
-    cats = Categoria.query.order_by(Categoria.nome).all()
-    return render_template('categorias.html', categorias=cats)
-
-@app.route('/categorias/<int:id>/excluir', methods=['POST'])
-@login_required
-def categoria_excluir(id):
-    cat = Categoria.query.get_or_404(id)
-    # desvincula categoria dos produtos e apaga
-    for p in Produto.query.filter_by(categoria_id=cat.id).all():
-        p.categoria_id = None
-    db.session.delete(cat)
-    db.session.commit()
-    flash('Categoria excluída.', 'success')
-    return redirect(url_for('categorias'))
-
-# -----------------------------
-# Produtos
-# -----------------------------
-@app.route('/produtos')
+# -------- PRODUTOS --------
+@app.route("/produtos")
 @login_required
 def produtos():
+    q = (request.args.get("q") or "").strip()
+    ver = request.args.get("ver") == "1"  # só lista quando ver=1 ou quando há busca
+    produtos = []
+    if q:
+        produtos = Produto.query.filter(
+            db.or_(Produto.nome.ilike(f"%{q}%"), Produto.codigo.ilike(f"%{q}%"))
+        ).order_by(Produto.id.desc()).all()
+        ver = True
+    elif ver:
+        produtos = Produto.query.order_by(Produto.id.desc()).all()
     categorias = Categoria.query.order_by(Categoria.nome).all()
-    return render_template('produtos.html', categorias=categorias)
+    return render_template("produtos.html", produtos=produtos, categorias=categorias, q=q, ver=ver)
 
-@app.route('/produtos/ver_todos')
+@app.route("/produtos/ver_todos")
 @login_required
 def produtos_ver_todos():
-    q = request.args.get('q','').strip().lower()
-    query = Produto.query
-    if q:
-        if q.isdigit():
-            query = query.filter((Produto.id==int(q)) | (Produto.nome.ilike(f'%{q}%')))
-        else:
-            query = query.filter(Produto.nome.ilike(f'%{q}%'))
-    itens = query.order_by(Produto.id.asc()).all()
-    return render_template('produtos_todos.html', produtos=itens, q=q)
+    return redirect(url_for("produtos", ver=1))
 
-@app.route('/produtos/novo', methods=['GET','POST'])
+@app.route("/produtos/novo", methods=["GET","POST"])
 @login_required
 def novo_produto():
     categorias = Categoria.query.order_by(Categoria.nome).all()
-    if request.method == 'POST':
-        nome = request.form.get('nome','').strip()
-        custo = float(request.form.get('custo', 0) or 0)
-        varejo = float(request.form.get('preco_varejo', 0) or 0)
-        atacado = float(request.form.get('preco_atacado', 0) or 0)
-        estoque = int(request.form.get('estoque', 0) or 0)
-        cat_id = request.form.get('categoria_id') or None
-        if nome:
-            p = Produto(
-                nome=nome, custo=custo, preco_varejo=varejo,
-                preco_atacado=atacado, estoque=estoque,
-                categoria_id=int(cat_id) if cat_id else None
-            )
-            db.session.add(p)
-            db.session.commit()
-            flash(f'Produto criado. Código #{p.id:03d}', 'success')
-            return redirect(url_for('produtos_ver_todos'))
-    return render_template('novo_produto.html', categorias=categorias)
+    if request.method == "POST":
+        nome = (request.form.get("nome") or "").strip()
+        custo = float(request.form.get("custo") or 0)
+        varejo = float(request.form.get("varejo") or 0)
+        atacado = float(request.form.get("atacado") or 0)
+        estoque = int(request.form.get("estoque") or 0)
+        categoria_id = request.form.get("categoria") or ""
+        categoria_id = int(categoria_id) if str(categoria_id).isdigit() else None
+        if not nome:
+            flash("Informe o nome do produto", "warning")
+            return render_template("novo_produto.html", categorias=categorias)
+        existentes = [int(p.codigo) for p in Produto.query.filter(Produto.codigo.is_not(None)).all() if (p.codigo or "").isdigit()]
+        proximo = (max(existentes) + 1) if existentes else 1
+        codigo = f"{proximo:03d}"
+        p = Produto(
+            codigo=codigo, nome=nome, custo=custo,
+            preco_varejo=varejo, preco_atacado=atacado,
+            estoque=estoque, categoria_id=categoria_id
+        )
+        db.session.add(p)
+        db.session.commit()
+        flash(f"Produto cadastrado (código {codigo})", "success")
+        return redirect(url_for("produtos", ver=1))
+    return render_template("novo_produto.html", categorias=categorias)
 
-@app.route('/produtos/<int:id>/excluir', methods=['POST'])
+# Mantém /categorias exatamente
+@app.route("/categorias", methods=["GET","POST"])
 @login_required
-def produto_excluir(id):
-    p = Produto.query.get_or_404(id)
-    db.session.delete(p)
-    db.session.commit()
-    flash('Produto excluído.', 'success')
-    return redirect(url_for('produtos_ver_todos'))
+def categorias():
+    if request.method == "POST":
+        nome = (request.form.get("nome") or "").strip()
+        if nome:
+            db.session.add(Categoria(nome=nome))
+            db.session.commit()
+            flash("Categoria criada", "success")
+            return redirect(url_for("categorias"))
+    categorias = Categoria.query.order_by(Categoria.nome).all()
+    return render_template("categorias.html", categorias=categorias)
 
-# -----------------------------
-# Movimentações (Vendas / Entradas / Saídas)
-# -----------------------------
-@app.route('/movimentacoes', methods=['GET','POST'])
+@app.route("/categorias/excluir/<int:id>", methods=["POST"])
+@login_required
+def excluir_categoria(id):
+    c = Categoria.query.get_or_404(id)
+    vinc = Produto.query.filter_by(categoria_id=c.id).first()
+    if vinc:
+        flash("Existe produto nessa categoria. Remova/edite o produto antes.", "warning")
+        return redirect(url_for("categorias"))
+    db.session.delete(c)
+    db.session.commit()
+    flash("Categoria excluída", "success")
+    return redirect(url_for("categorias"))
+
+# -------- API de produtos (para buscas) --------
+@app.route("/api/produtos")
+@login_required
+def api_produtos():
+    q = (request.args.get("q") or "").strip()
+    query = Produto.query
+    if q:
+        query = query.filter(
+            db.or_(Produto.nome.ilike(f"%{q}%"), Produto.codigo.ilike(f"%{q}%"))
+        )
+    prods = query.order_by(Produto.nome.asc()).limit(50).all()
+    data = [{
+        "id": p.id,
+        "codigo": p.codigo or "",
+        "nome": p.nome,
+        "preco_varejo": float(p.preco_varejo or 0),
+        "preco_atacado": float(p.preco_atacado or 0),
+        "estoque": int(p.estoque or 0)
+    } for p in prods]
+    return jsonify(data)
+
+# -------- VENDAS (mantido) --------
+@app.route("/vendas", methods=["GET","POST"])
+@login_required
+def vendas():
+    q = (request.args.get("q") or "").strip()
+    if q:
+        produtos = Produto.query.filter(
+            db.or_(Produto.nome.ilike(f"%{q}%"), Produto.codigo.ilike(f"%{q}%"))
+        ).order_by(Produto.nome.asc()).all()
+    else:
+        produtos = Produto.query.order_by(Produto.nome.asc()).limit(20).all()
+
+    if request.method == "POST":
+        itens_json = request.form.get("itens_json", "").strip()
+        itens_list = []
+        total = 0.0
+        if itens_json:
+            try:
+                parsed = json.loads(itens_json)
+            except Exception:
+                parsed = []
+            for it in parsed:
+                codigo = it.get("codigo","")
+                nome = it.get("nome","")
+                qtd = int(it.get("qtd", 1))
+                preco_unit = float(it.get("preco_unit", 0))
+                tipo_preco = it.get("tipo_preco","varejo")
+                subtotal = preco_unit * qtd
+                total += subtotal
+                itens_list.append({
+                    "codigo": codigo, "nome": nome, "qtd": qtd,
+                    "preco_unit": preco_unit, "tipo_preco": tipo_preco,
+                    "subtotal": subtotal
+                })
+        else:
+            itens_str = request.form.get("itens","")
+            for pedaco in [p.strip() for p in itens_str.split(",") if p.strip()]:
+                try:
+                    nome_part, valor_part = pedaco.rsplit(" - R$ ", 1)
+                    nome = nome_part.split(" x")[0].strip()
+                    qtd = int(nome_part.split(" x")[1])
+                    preco_total = float(valor_part.replace(",", "."))
+                except Exception:
+                    nome = pedaco; qtd = 1; preco_total = 0.0
+                prod = Produto.query.filter_by(nome=nome).first()
+                codigo = prod.codigo if prod else ""
+                preco_unit = (preco_total / qtd) if qtd else 0.0
+                total += preco_total
+                itens_list.append({
+                    "codigo": codigo, "nome": nome, "qtd": qtd,
+                    "preco_unit": preco_unit, "tipo_preco": "livre",
+                    "subtotal": preco_total
+                })
+
+        forma = request.form.get("forma_pagamento","")
+        obs = request.form.get("observacoes","")
+        v = Venda(
+            data=hoje_str(), forma_pagamento=forma, observacoes=obs,
+            total=total, itens=json.dumps(itens_list, ensure_ascii=False)
+        )
+        db.session.add(v); db.session.commit()
+        flash("Venda registrada", "success")
+        return redirect(url_for("vendas"))
+    return render_template("vendas.html", produtos=produtos, q=q)
+
+# -------- MOVIMENTAÇÕES --------
+@app.route("/movimentacoes", methods=["GET","POST"])
 @login_required
 def movimentacoes():
-    tipo = request.args.get('tipo','venda')  # aba ativa
+    d = request.args.get("data") or hoje_str()
+    vendas = Venda.query.filter_by(data=d).all()
+    entradas = Lancamento.query.filter_by(data=d, tipo="entrada").all()
+    saidas = Lancamento.query.filter_by(data=d, tipo="saida").all()
+    total_vendas = sum(v.total for v in vendas)
+    total_entradas = sum(l.valor for l in entradas)
+    total_saidas = sum(l.valor for l in saidas)
+    return render_template(
+        "movimentacoes.html",
+        data=d, vendas=vendas, entradas=entradas, saidas=saidas,
+        total_vendas=total_vendas, total_entradas=total_entradas, total_saidas=total_saidas
+    )
 
-    if request.method == 'POST':
-        tipo_form = request.form.get('tipo','venda')
-        valor = float(request.form.get('valor',0) or 0)
-        forma = request.form.get('forma_pagamento','')
-        obs = request.form.get('observacoes','')
-        itens_json = request.form.get('itens','')  # vendas: json de itens
+@app.route("/movimentacoes/nova", methods=["POST"])
+@login_required
+def nova_movimentacao():
+    tipo = request.form.get("tipo")
+    descricao = (request.form.get("descricao") or "").strip()
+    valor = float(request.form.get("valor") or 0)
+    data_ref = request.form.get("data") or hoje_str()
+    if tipo not in ("entrada","saida"):
+        flash("Tipo inválido", "danger")
+        return redirect(url_for("movimentacoes"))
+    db.session.add(Lancamento(data=data_ref, tipo=tipo, descricao=descricao, valor=valor))
+    db.session.commit()
+    flash("Movimentação registrada", "success")
+    return redirect(url_for("movimentacoes", data=data_ref))
 
-        mov = Movimentacao(
-            data=hoje_iso(),
-            tipo=tipo_form,
-            valor=valor,
-            forma_pagamento=forma if tipo_form == 'venda' else None,
-            observacoes=obs,
-            itens=itens_json if tipo_form == 'venda' else None
-        )
-        db.session.add(mov)
-
-        # impacto no caixa via lançamentos
-        if tipo_form == 'venda':
-            db.session.add(Lancamento(data=hoje_iso(), tipo='entrada', descricao='Venda', valor=valor))
-            # baixa de estoque se itens informados
-            try:
-                items = json.loads(itens_json) if itens_json else []
-                for it in items:
-                    pid = int(it.get('id',0))
-                    qtd = int(it.get('qtd',1))
-                    prod = Produto.query.get(pid)
-                    if prod:
-                        prod.estoque = max(0, (prod.estoque or 0) - qtd)
-            except Exception:
-                pass
-        elif tipo_form == 'entrada':
-            db.session.add(Lancamento(data=hoje_iso(), tipo='entrada', descricao='Entrada manual', valor=valor))
-        elif tipo_form == 'saida':
-            db.session.add(Lancamento(data=hoje_iso(), tipo='saida', descricao='Saída manual', valor=valor))
-
-        db.session.commit()
-        flash('Movimentação registrada.', 'success')
-        return redirect(url_for('movimentacoes', tipo=tipo_form))
-
-    # GET — carrega produtos e movimentos do dia com proteção contra DB frio
-    try:
-        produtos = Produto.query.order_by(Produto.nome).all()
-        do_dia = Movimentacao.query.filter_by(data=hoje_iso()).all()
-        vendas = [m for m in do_dia if m.tipo=='venda']
-        entradas = [m for m in do_dia if m.tipo=='entrada']
-        saidas = [m for m in do_dia if m.tipo=='saida']
-    except Exception as e:
-        app.logger.error(f"Erro carregando Movimentações: {e}")
-        flash('Erro ao carregar movimentações. O banco pode estar inicializando, tente recarregar.', 'danger')
-        produtos, vendas, entradas, saidas = [], [], [], []
-
-    return render_template('movimentacoes.html',
-                           produtos=produtos, tipo=tipo,
-                           vendas=vendas, entradas=entradas, saidas=saidas)
-
-# -----------------------------
-# Caixa
-# -----------------------------
-@app.route('/caixa')
+# -------- CAIXA --------
+@app.route("/caixa")
 @login_required
 def caixa():
-    hoje = hoje_iso()
-    c = Caixa.query.filter_by(data=hoje).first()
-    lancs = Lancamento.query.filter_by(data=hoje).all()
-    total_entradas = sum(l.valor for l in lancs if l.tipo=='entrada')
-    total_saidas = sum(l.valor for l in lancs if l.tipo=='saida')
-    saldo_inicial = c.saldo_inicial if c else 0.0
-    saldo_atual = saldo_inicial + total_entradas - total_saidas
-    return render_template('caixa.html', caixa=c, total_entradas=total_entradas,
-                           total_saidas=total_saidas, saldo_atual=saldo_atual)
+    d = hoje_str()
+    c = Caixa.query.filter_by(data=d).first()
+    vendas = Venda.query.filter_by(data=d).all()
+    lancs = Lancamento.query.filter_by(data=d).all()
+    total_vendas = sum(v.total for v in vendas)
+    total_entradas = sum(l.valor for l in lancs if l.tipo == "entrada")
+    total_saidas = sum(l.valor for l in lancs if l.tipo == "saida")
+    saldo_atual = (c.saldo_inicial if c else 0.0) + total_vendas + total_entradas - total_saidas
+    return render_template(
+        "caixa.html",
+        caixa=c, total_vendas=total_vendas, total_entradas=total_entradas,
+        total_despesas=total_saidas, saldo_atual=saldo_atual, lancamentos=lancs
+    )
 
-@app.route('/abrir_caixa', methods=['POST'])
+@app.route("/abrir_caixa", methods=["POST"])
 @login_required
 def abrir_caixa():
-    valor = float(request.form.get('valor',0) or 0)
-    hoje = hoje_iso()
-    c = Caixa.query.filter_by(data=hoje).first()
-    if c:
-        c.saldo_inicial = valor
-        c.aberto = True
+    d = hoje_str()
+    valor = float(request.form.get("valor") or 0)
+    c = Caixa.query.filter_by(data=d).first()
+    if not c:
+        c = Caixa(data=d, saldo_inicial=valor, aberto=True)
+        db.session.add(c)
     else:
-        db.session.add(Caixa(data=hoje, saldo_inicial=valor, aberto=True))
-    db.session.commit()
-    return redirect(url_for('caixa'))
+        c.saldo_inicial = valor; c.aberto = True
+    db.session.commit(); flash("Caixa aberto", "success")
+    return redirect(url_for("caixa"))
 
-@app.route('/fechar_caixa', methods=['POST'])
+@app.route("/fechar_caixa", methods=["POST"])
 @login_required
 def fechar_caixa():
-    hoje = hoje_iso()
-    c = Caixa.query.filter_by(data=hoje).first()
+    d = hoje_str(); c = Caixa.query.filter_by(data=d).first()
     if c:
-        c.aberto = False
-        db.session.commit()
-    return redirect(url_for('caixa'))
+        c.aberto = False; db.session.commit(); flash("Caixa fechado", "success")
+    return redirect(url_for("caixa"))
 
-@app.route('/reabrir_caixa', methods=['POST'])
+@app.route("/reabrir_caixa", methods=["POST"])
 @login_required
 def reabrir_caixa():
-    hoje = hoje_iso()
-    c = Caixa.query.filter_by(data=hoje).first()
-    if not c:
-        flash('Ainda não existe caixa para hoje. Abra o caixa primeiro.', 'warning')
-        return redirect(url_for('caixa'))
-    if c.data != hoje:
-        flash('Caixa anterior não pode ser reaberto. Consulte em Fechamentos.', 'danger')
-        return redirect(url_for('caixa'))
-    if c.aberto:
-        flash('O caixa de hoje já está ABERTO.', 'info')
-    else:
-        c.aberto = True
-        db.session.commit()
-        flash('Caixa de hoje reaberto.', 'success')
-    return redirect(url_for('caixa'))
+    d = hoje_str(); c = Caixa.query.filter_by(data=d).first()
+    if c:
+        c.aberto = True; db.session.commit(); flash("Caixa reaberto", "success")
+    return redirect(url_for("caixa"))
 
-@app.route('/caixas_anteriores')
+@app.route("/caixas_anteriores")
 @login_required
 def caixas_anteriores():
     caixas = Caixa.query.order_by(Caixa.data.desc()).all()
-    resumo = []
+    resultado = []
     for c in caixas:
+        vendas = Venda.query.filter_by(data=c.data).all()
+        total_vendas = sum(v.total for v in vendas)
         lancs = Lancamento.query.filter_by(data=c.data).all()
-        entradas = sum(l.valor for l in lancs if l.tipo=='entrada')
-        saidas = sum(l.valor for l in lancs if l.tipo=='saida')
-        saldo_final = c.saldo_inicial + entradas - saidas
-        resumo.append({
-            'data': c.data,
-            'inicial': c.saldo_inicial,
-            'entradas': entradas,
-            'saidas': saidas,
-            'final': saldo_final,
-            'aberto': c.aberto
+        total_ent = sum(l.valor for l in lancs if l.tipo == "entrada")
+        total_des = sum(l.valor for l in lancs if l.tipo == "saida")
+        saldo_final = (c.saldo_inicial or 0.0) + total_vendas + total_ent - total_des
+        resultado.append({
+            "data": c.data, "inicial": c.saldo_inicial or 0.0,
+            "vendas": total_vendas, "entradas": total_ent,
+            "despesas": total_des, "final": saldo_final, "aberto": c.aberto
         })
-    return render_template('caixas_anteriores.html', caixas=resumo)
+    return render_template("caixas_anteriores.html", caixas=resultado)
 
-# -----------------------------
-# Orçamentos
-# -----------------------------
-@app.route('/orcamentos')
+# -------- RELATÓRIOS --------
+def _range_datas(periodo: str):
+    hoje_d = hoje_data()
+    if periodo == "semanal":
+        ini = hoje_d - timedelta(days=6); fim = hoje_d
+    else:
+        ini = hoje_d.replace(day=1); fim = hoje_d
+    return ini, fim
+
+def _coleta(ini: date, fim: date):
+    d = ini; entrou = saiu = vendas_total = 0.0
+    while d <= fim:
+        ds = d.strftime("%Y-%m-%d")
+        vendas_total += sum(v.total for v in Venda.query.filter_by(data=ds).all())
+        lancs = Lancamento.query.filter_by(data=ds).all()
+        entrou += sum(l.valor for l in lancs if l.tipo == "entrada")
+        saiu += sum(l.valor for l in lancs if l.tipo == "saida")
+        d += timedelta(days=1)
+    lucro = (vendas_total + entrou) - saiu
+    return entrou, saiu, vendas_total, lucro
+
+@app.route("/relatorios")
 @login_required
-def orcamentos():
-    lista = Orcamento.query.order_by(Orcamento.id.desc()).all()
-    return render_template('orcamentos.html', orcamentos=lista)
+def relatorios():
+    caixas = Caixa.query.all()
+    saldo_inicial = sum(c.saldo_inicial or 0 for c in caixas)
+    total_vendas = sum(sum(v.total for v in Venda.query.filter_by(data=c.data)) for c in caixas)
+    total_despesas = sum(sum(l.valor for l in Lancamento.query.filter_by(data=c.data) if l.tipo == "saida") for c in caixas)
+    saldo_final = saldo_inicial + total_vendas - total_despesas
+    meses = sorted(set((c.data or "")[:7] for c in caixas if c.data))
+    comparativo = []
+    for mes in meses:
+        cx_mes = [c for c in caixas if (c.data or "").startswith(mes)]
+        vendas_mes = sum(sum(v.total for v in Venda.query.filter_by(data=c.data)) for c in cx_mes)
+        desp_mes = sum(sum(l.valor for l in Lancamento.query.filter_by(data=c.data) if l.tipo == "saida") for c in cx_mes)
+        comparativo.append({"mes": mes, "vendas": f"{vendas_mes:.2f}", "despesas": f"{desp_mes:.2f}", "lucro": f"{(vendas_mes-desp_mes):.2f}"})
+    return render_template(
+        "relatorios.html",
+        saldo_inicial=f"{saldo_inicial:.2f}", total_vendas=f"{total_vendas:.2f}",
+        total_despesas=f"{total_despesas:.2f}", saldo_final=f"{saldo_final:.2f}",
+        comparativo=comparativo
+    )
 
-@app.route('/orcamentos/novo', methods=['GET','POST'])
+@app.route("/relatorios/<periodo>")
+@login_required
+def relatorio_periodo(periodo):
+    if periodo not in ("semanal","mensal"):
+        flash("Período inválido", "warning")
+        return redirect(url_for("relatorios"))
+    ini, fim = _range_datas(periodo)
+    entrou, saiu, vendas_total, lucro = _coleta(ini, fim)
+    return render_template(
+        "relatorio_financeiro.html",
+        titulo=("Relatório Semanal" if periodo=="semanal" else "Relatório Mensal"),
+        data_inicio=ini.strftime("%d/%m/%Y"), data_fim=fim.strftime("%d/%m/%Y"),
+        entrou=f"{entrou:.2f}", saiu=f"{saiu:.2f}",
+        vendas=f"{vendas_total:.2f}", lucro=f"{lucro:.2f}"
+    )
+
+# ---------------- ORÇAMENTOS ----------------
+@app.route("/orcamentos")
+@login_required
+def orcamentos_list():
+    abertos = Orcamento.query.filter_by(status="aberto").order_by(Orcamento.id.desc()).all()
+    return render_template("orcamentos_list.html", orcamentos=abertos)
+
+@app.route("/orcamentos/fechados")
+@login_required
+def orcamentos_fechados():
+    fechados = Orcamento.query.filter_by(status="fechado").order_by(Orcamento.id.desc()).all()
+    return render_template("orcamentos_list_fechados.html", orcamentos=fechados)
+
+@app.route("/orcamentos/novo")
 @login_required
 def orcamento_novo():
-    if request.method == 'POST':
-        cliente_nome = request.form.get('cliente_nome','').strip()
-        cliente_telefone = request.form.get('cliente_telefone','').strip()
-        moto_modelo = request.form.get('moto_modelo','').strip()
-        moto_ano = request.form.get('moto_ano','').strip()
-        o = Orcamento(cliente_nome=cliente_nome, cliente_telefone=cliente_telefone,
-                      moto_modelo=moto_modelo, moto_ano=moto_ano, itens=json.dumps([]),
-                      total=0.0, status='aberto')
-        db.session.add(o)
-        db.session.commit()
-        return redirect(url_for('orcamento_detalhe', id=o.id))
-    return render_template('orcamento_novo.html')
+    o = Orcamento(status="aberto", data=hoje_str(), itens="[]", total=0.0)
+    db.session.add(o); db.session.commit()
+    return redirect(url_for("orcamento_editar", oid=o.id))
 
-@app.route('/orcamentos/<int:id>', methods=['GET','POST'])
+@app.route("/orcamentos/<int:oid>", methods=["GET","POST"])
 @login_required
-def orcamento_detalhe(id):
-    o = Orcamento.query.get_or_404(id)
-    produtos = Produto.query.order_by(Produto.nome).all()
+def orcamento_editar(oid):
+    o = Orcamento.query.get_or_404(oid)
+    if request.method == "POST":
+        acao = request.form.get("action","salvar")
+        o.cliente = request.form.get("cliente","").strip()
+        o.moto = request.form.get("moto","").strip()
+        o.servico = request.form.get("servico","").strip()
+        o.data = request.form.get("data") or hoje_str()
+        o.itens = request.form.get("itens_json","[]")
+        o.total = float(request.form.get("total") or 0)
 
-    if request.method == 'POST':
-        acao = request.form.get('acao')
-        if acao == 'add_item':
-            pid = int(request.form.get('produto_id'))
-            qtd = int(request.form.get('qtd',1))
-            prod = Produto.query.get(pid)
-            itens = json.loads(o.itens) if o.itens else []
-            itens.append({'id': prod.id, 'nome': prod.nome, 'qtd': qtd, 'preco': prod.preco_varejo})
-            o.itens = json.dumps(itens)
-            o.total = sum(it['qtd']*it['preco'] for it in itens)
+        if acao == "finalizar":
+            forma = request.form.get("forma_pagamento","").strip()
+            if not forma:
+                flash("Informe a forma de pagamento para finalizar.", "warning")
+                return redirect(url_for("orcamento_editar", oid=o.id))
+            o.forma_pagamento = forma
+            o.status = "fechado"
             db.session.commit()
-            return redirect(url_for('orcamento_detalhe', id=id))
-
-        if acao == 'rm_item':
-            idx = int(request.form.get('idx'))
-            itens = json.loads(o.itens) if o.itens else []
-            if 0 <= idx < len(itens):
-                itens.pop(idx)
-            o.itens = json.dumps(itens)
-            o.total = sum(it['qtd']*it['preco'] for it in itens)
+            # Gera uma venda (entra no Caixa automaticamente)
+            v = Venda(
+                data=o.data, forma_pagamento=forma,
+                observacoes=f"Orçamento #{o.id} finalizado",
+                total=o.total, itens=o.itens
+            )
+            db.session.add(v); db.session.commit()
+            flash("Orçamento finalizado e registrado no Caixa.", "success")
+            return redirect(url_for("orcamentos_list"))
+        else:
             db.session.commit()
-            return redirect(url_for('orcamento_detalhe', id=id))
+            flash("Orçamento salvo.", "success")
+            return redirect(url_for("orcamento_editar", oid=o.id))
 
-    itens = json.loads(o.itens) if o.itens else []
-    return render_template('orcamento_detalhe.html', o=o, itens=itens, produtos=produtos)
+    # GET
+    try:
+        itens = json.loads(o.itens or "[]")
+    except Exception:
+        itens = []
+    return render_template("orcamento_form.html", o=o, itens=itens)
 
-@app.route('/orcamentos/<int:id>/fechar', methods=['POST'])
+@app.route("/orcamentos/<int:oid>/imprimir")
 @login_required
-def orcamento_fechar(id):
-    o = Orcamento.query.get_or_404(id)
-    if o.status != 'fechado':
-        forma = request.form.get('forma_pagamento','')
-        o.status = 'fechado'
-        o.forma_pagamento = forma
-        db.session.add(Movimentacao(
-            data=hoje_iso(), tipo='venda', valor=o.total,
-            forma_pagamento=forma, observacoes=f'Orçamento #{o.id} fechado',
-            itens=o.itens
-        ))
-        db.session.add(Lancamento(data=hoje_iso(), tipo='entrada', descricao=f'Orçamento #{o.id}', valor=o.total))
-        db.session.commit()
-        flash('Orçamento fechado e lançado no caixa.', 'success')
-    return redirect(url_for('orcamentos'))
+def orcamento_imprimir(oid):
+    o = Orcamento.query.get_or_404(oid)
+    try:
+        itens = json.loads(o.itens or "[]")
+    except Exception:
+        itens = []
+    return render_template("orcamento_print.html", o=o, itens=itens)
 
-# -----------------------------
-# Init (útil quando roda local com python app.py)
-# -----------------------------
-if __name__ == '__main__':
+# --------------- BOOT ---------------
+if __name__ == "__main__":
     with app.app_context():
-        db.create_all()
-        if not Usuario.query.filter_by(nome='HGMOTO').first():
-            db.session.add(Usuario(nome='HGMOTO', senha='hgmotopecas2025'))
+        ensure_schema()
+        if not Usuario.query.filter_by(nome="HGMOTO").first():
+            db.session.add(Usuario(nome="HGMOTO", senha="hgmotopecas2025"))
             db.session.commit()
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False)
+    port = int(os.environ.get("PORT", "5000"))
+    app.run(host="0.0.0.0", port=port)

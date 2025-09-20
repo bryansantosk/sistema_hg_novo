@@ -1,29 +1,73 @@
-{% extends 'base.html' %}
-{% block title %}Caixa{% endblock %}
-{% block content %}
-<div class="card">
-  <h2>Caixa de hoje</h2>
-  {% if caixa %}
-    <p>Status: {{ 'ABERTO' if caixa.aberto else 'FECHADO' }}</p>
-    <p>Saldo inicial: R$ {{ '%.2f'|format(caixa.saldo_inicial) }}</p>
-  {% else %}
-    <p>Caixa ainda não aberto hoje.</p>
-  {% endif %}
-  <p>Entradas: R$ {{ '%.2f'|format(total_entradas) }}</p>
-  <p>Saídas: R$ {{ '%.2f'|format(total_saidas) }}</p>
-  <p><strong>Saldo atual: R$ {{ '%.2f'|format(saldo_atual) }}</strong></p>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Caixa</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body {
+            background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+            background-size: cover; font-family: Arial, sans-serif; color: #fff;
+        }
+        .container { max-width: 800px; margin: 90px auto 120px auto; background: rgba(0,0,0,0.6); padding: 20px; border-radius:10px; }
+        .btn { display:inline-block; padding:10px 15px; background:#00c851; color:#fff; text-decoration:none; border-radius:8px; margin-right:10px; }
+        .btn:hover { background:#007e33; }
+        table { width:100%; border-collapse: collapse; margin-top: 15px; background:#fff; color:#000; }
+        th, td { padding: 10px; border-bottom: 1px solid #ddd; }
+        th { background:#333; color:#fff; }
+        label { display:block; margin-top: 10px;}
+        input[type="number"] { width: 100%; padding: 10px; border: none; border-radius: 6px; }
+        .footer-buttons { position: fixed; left:0; right:0; bottom:30px; display:flex; justify-content:center; gap:10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Caixa do Dia</h2>
 
-  <div class="row">
-    <form method="post" action="{{ url_for('abrir_caixa') }}">
-      <input name="valor" type="number" step="0.01" placeholder="Saldo inicial" required>
-      <button class="btn">Abrir/Reconfigurar</button>
-    </form>
-    <form method="post" action="{{ url_for('fechar_caixa') }}">
-      <button class="btn danger">Fechar</button>
-    </form>
-    <form method="post" action="{{ url_for('reabrir_caixa') }}">
-      <button class="btn">Reabrir (só o de hoje)</button>
-    </form>
-  </div>
-</div>
-{% endblock %}
+        {% if not caixa %}
+        <form method="POST" action="{{ url_for('abrir_caixa') }}">
+            <label>Saldo Inicial:</label>
+            <input type="number" name="valor" step="0.01" required>
+            <button class="btn" type="submit">Abrir Caixa</button>
+        </form>
+        {% else %}
+        <p><strong>Saldo Inicial:</strong> R$ {{ '%.2f'|format(caixa.saldo_inicial or 0) }}</p>
+        <p><strong>Total de Vendas:</strong> R$ {{ '%.2f'|format(total_vendas or 0) }}</p>
+        <p><strong>Entradas (movimentações):</strong> R$ {{ '%.2f'|format(total_entradas or 0) }}</p>
+        <p><strong>Saídas (movimentações):</strong> R$ {{ '%.2f'|format(total_despesas or 0) }}</p>
+        <p><strong>Saldo Atual:</strong> R$ {{ '%.2f'|format(saldo_atual or 0) }}</p>
+
+        {% if caixa.aberto %}
+        <form method="POST" action="{{ url_for('fechar_caixa') }}">
+            <button class="btn" type="submit">Fechar Caixa</button>
+        </form>
+        {% else %}
+        <form method="POST" action="{{ url_for('reabrir_caixa') }}">
+            <button class="btn" type="submit">Reabrir Caixa</button>
+        </form>
+        {% endif %}
+
+        <h3>Histórico do Dia</h3>
+        <table>
+            <tr><th>Tipo</th><th>Descrição</th><th>Valor</th></tr>
+            {% for l in lancamentos %}
+            <tr>
+                <td>{{ l.tipo }}</td>
+                <td>{{ l.descricao }}</td>
+                <td>R$ {{ '%.2f'|format(l.valor or 0) }}</td>
+            </tr>
+            {% endfor %}
+            {% if not lancamentos %}
+            <tr><td colspan="3">Sem lançamentos no dia.</td></tr>
+            {% endif %}
+        </table>
+        {% endif %}
+    </div>
+
+    <div class="footer-buttons">
+        <a href="{{ url_for('movimentacoes') }}" class="btn">Movimentações</a>
+        <a href="{{ url_for('caixas_anteriores') }}" class="btn">Caixas Anteriores</a>
+        <a href="{{ url_for('index') }}" class="btn">Menu</a>
+    </div>
+</body>
+</html>

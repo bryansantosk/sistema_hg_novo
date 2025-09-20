@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Orçamento #{{ o.id }} — Imprimir</title>
+<style>
+    @media print { .noprint { display:none; } }
+    body { font-family: Arial, sans-serif; color:#000; }
+    .a4 { width: 800px; margin: 20px auto; border: 1px solid #000; padding: 14px; }
+    .titulo { text-align:center; font-weight:bold; font-size: 20px; margin-bottom: 8px; }
+    .caixa { border:1px solid #000; padding:8px; margin:6px 0; }
+    table { width:100%; border-collapse:collapse; margin-top: 6px; }
+    th, td { border:1px solid #000; padding:6px; }
+    th { background:#333; color:#fff; }
+    .linha { display:flex; gap:8px; }
+    .linha > div { flex:1; }
+</style>
+</head>
+<body>
+<div class="a4">
+    <div class="titulo">HG MOTO PEÇAS</div>
+    <div class="caixa">
+        <div>PORTAL DOS IPES – RUA:G – Nº61 – MONTES CLAROS</div>
+        <div>FONE:(38) 9 9257-4002    CNPJ:56.334.244/0001-65</div>
+    </div>
+
+    <div class="linha">
+        <div class="caixa"><strong>CLIENTE:</strong> {{ o.cliente or '' }}</div>
+        <div class="caixa"><strong>DATA:</strong> {{ o.data }}</div>
+    </div>
+    <div class="linha">
+        <div class="caixa"><strong>MOTO:</strong> {{ o.moto or '' }}</div>
+        <div class="caixa"><strong>SERVIÇO:</strong> {{ o.servico or '' }}</div>
+        <div class="caixa"><strong>{{ o.garantia or '90 DIAS GARANTIA' }}</strong></div>
+    </div>
+
+    <table>
+        <tr><th style="width:80px;">UND</th><th>DESCRIÇÃO</th><th style="width:150px;">VALOR</th></tr>
+        {% set total = 0 %}
+        {% for it in itens %}
+        {% set sub = (it.qtd or 0) * (it.valor_unit or 0) %}
+        {% set total = total + sub %}
+        <tr>
+            <td style="text-align:center;">{{ it.qtd }}</td>
+            <td>{{ it.nome }}</td>
+            <td>R$ {{ '%.2f'|format(sub) }}</td>
+        </tr>
+        {% endfor %}
+        {% if not itens %}
+        <tr><td colspan="3">Sem itens.</td></tr>
+        {% endif %}
+    </table>
+
+    <div class="caixa"><strong>OBS: GARANTIA NÃO COBRE MAL USO</strong></div>
+
+    <div class="caixa" style="text-align:right;"><strong>VALOR TOTAL= R$ {{ '%.2f'|format(total) }}</strong></div>
+
+    <div class="noprint" style="margin-top:10px; text-align:center;">
+        <button onclick="window.print()">Imprimir</button>
+    </div>
+</div>
+</body>
+</html>

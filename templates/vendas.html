@@ -7,116 +7,268 @@
     <style>
         body {
             background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
-            background-size: cover;
-            font-family: Arial, sans-serif;
-            color: #fff;
+            background-size: cover; font-family: Arial, sans-serif; color: #fff;
         }
-        .container {
-            max-width: 850px;
-            margin: 90px auto;
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 25px;
-            border-radius: 10px;
-        }
-        table {
-            width: 100%;
-            background-color: #222;
-            margin-bottom: 20px;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 12px;
-            border-bottom: 1px solid #444;
-        }
-        input[type="number"], select, textarea {
-            width: 100%;
-            padding: 10px;
-            border: none;
-            border-radius: 6px;
-            margin-bottom: 15px;
-        }
-        .btn {
-            background-color: #33b5e5;
-            color: #fff;
-            padding: 10px 18px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-right: 10px;
-        }
-        .btn:hover {
-            background-color: #0099cc;
-        }
+        .container { max-width: 980px; margin: 90px auto 120px auto; background: rgba(0,0,0,0.55); padding: 20px; border-radius: 10px; }
+        .box { background: rgba(255,255,255,0.06); padding:10px; border-radius:8px; margin-top: 10px; }
+        label { display:block; margin-top:8px; }
+        input, select, textarea { width:100%; padding:10px; border: none; border-radius:8px; }
+        .btn { display:inline-block; padding:10px 15px; background:#00c851; color:#fff; text-decoration:none; border-radius:8px; }
+        .btn:hover { background:#007e33; }
+        .footer-buttons { position: fixed; left:0; right:0; bottom: 30px; display:flex; justify-content:center; gap: 10px; }
+        table { width:100%; border-collapse: collapse; margin-top: 10px; background:#fff; color:#000; }
+        th, td { padding:10px; border-bottom:1px solid #ddd; }
+        th { background:#333; color:#fff; }
+        .inline { display:flex; gap:10px; align-items:center; }
+        .qtybtn { padding:6px 10px; background:#00c851; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+        .qtybtn:hover { background:#007e33; }
+        .muted { color:#666; font-size:12px; }
+        .results { background:#fff; color:#000; border-radius:8px; margin-top:8px; max-height:240px; overflow:auto; }
+        .result-row { display:grid; grid-template-columns: 70px 1fr 110px 110px 90px 100px; gap:8px; padding:8px; border-bottom:1px solid #eee; }
+        .result-row:nth-child(odd){ background:#fafafa; }
+        .result-row button { padding:6px 10px; background:#00c851; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+        .result-row button:hover { background:#007e33; }
+        .cart-table td select { width: 100%; }
+        .hide { display:none; }
     </style>
-    <script>
-        let produtosSelecionados = [];
-
-        function adicionarProduto(nome, preco) {
-            const quantidade = prompt("Quantidade do produto: " + nome);
-            if (!quantidade || isNaN(quantidade)) return;
-
-            const totalProduto = (parseFloat(preco) * parseInt(quantidade)).toFixed(2);
-            produtosSelecionados.push(`${nome} x${quantidade} - R$ ${totalProduto}`);
-
-            atualizarResumo();
-        }
-
-        function atualizarResumo() {
-            let total = 0;
-            let lista = "";
-
-            produtosSelecionados.forEach(p => {
-                lista += p + "\\n";
-                const valor = parseFloat(p.split('R$ ')[1]);
-                if (!isNaN(valor)) total += valor;
-            });
-
-            document.getElementById("itens").value = produtosSelecionados.join(',');
-            document.getElementById("total").value = total.toFixed(2);
-            document.getElementById("resumo").innerText = lista;
-        }
-    </script>
 </head>
 <body>
     <div class="container">
-        <h2>Registrar Venda</h2>
+        <h2>Vendas</h2>
 
-        <form method="POST">
-            <label>Forma de Pagamento:</label>
-            <select name="forma_pagamento" required>
-                <option value="Dinheiro">Dinheiro</option>
-                <option value="Cartão">Cartão</option>
-                <option value="Pix">Pix</option>
-            </select>
+        <!-- BUSCA DE PRODUTO -->
+        <div class="box">
+            <label>Pesquisar produto por código ou nome:</label>
+            <input type="text" id="busca" placeholder="Ex.: 001 ou Pneu...">
+            <div id="resultados" class="results hide"></div>
+            <div class="muted">Digite para ver resultados e clique em <b>Adicionar</b>.</div>
+        </div>
 
-            <label>Observações:</label>
-            <textarea name="observacoes" rows="3" placeholder="Ex: cliente pagou com troco..."></textarea>
+        <!-- CARRINHO / ITENS DA VENDA -->
+        <div class="box">
+            <h3>Itens da venda</h3>
+            <table class="cart-table">
+                <thead>
+                    <tr>
+                        <th style="width:80px;">Código</th>
+                        <th>Produto</th>
+                        <th style="width:120px;">Preço</th>
+                        <th style="width:140px;">Tipo</th>
+                        <th style="width:150px;">Qtd</th>
+                        <th style="width:140px;">Subtotal</th>
+                        <th style="width:100px;">Ação</th>
+                    </tr>
+                </thead>
+                <tbody id="cartBody">
+                    <tr id="vazioRow"><td colspan="7">Nenhum item adicionado.</td></tr>
+                </tbody>
+            </table>
+            <p style="margin-top:8px;"><strong>Total:</strong> R$ <span id="totalSpan">0.00</span></p>
+        </div>
 
-            <label>Resumo dos Produtos Selecionados:</label>
-            <pre id="resumo" style="background:#111; padding:10px; min-height:60px;"></pre>
+        <!-- FORM DE FECHAMENTO (permanece simples) -->
+        <div class="box">
+            <form method="post" id="formVenda">
+                <!-- Campo antigo (compatibilidade). Pode ficar vazio que não tem problema -->
+                <label>Itens (formato livre, igual você já usa):</label>
+                <textarea name="itens" rows="2" placeholder="(opcional - o sistema já usa a lista acima)"></textarea>
 
-            <input type="hidden" name="itens" id="itens">
-            <input type="hidden" name="total" id="total">
+                <input type="hidden" name="itens_json" id="itens_json">
+                <label>Forma de Pagamento:</label>
+                <select name="forma_pagamento">
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Cartão">Cartão</option>
+                    <option value="PIX">PIX</option>
+                    <option value="Outros">Outros</option>
+                </select>
 
-            <button type="submit" class="btn">Finalizar Venda</button>
-            <a href="{{ url_for('index') }}" class="btn">Menu</a>
-        </form>
+                <label>Observações:</label>
+                <textarea name="observacoes" rows="2"></textarea>
 
-        <h3>Produtos Disponíveis:</h3>
-        <table>
-            <tr>
-                <th>Produto</th>
-                <th>Preço Varejo</th>
-                <th>Ação</th>
-            </tr>
-            {% for p in produtos %}
-            <tr>
-                <td>{{ p.nome }}</td>
-                <td>R$ {{ '%.2f'|format(p.preco_varejo) }}</td>
-                <td><button type="button" class="btn" onclick="adicionarProduto('{{ p.nome }}', '{{ p.preco_varejo }}')">Adicionar</button></td>
-            </tr>
-            {% endfor %}
-        </table>
+                <label>Total (R$):</label>
+                <input type="number" step="0.01" name="total" id="totalInput" required>
+
+                <div style="margin-top:10px;">
+                    <button class="btn" type="submit">Registrar Venda</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- TABELINHA DE APOIO (opcional) -->
+        <div class="box">
+            <h3>Produtos (amostra / filtrados)</h3>
+            <table>
+                <tr><th>Código</th><th>Nome</th><th>Varejo</th><th>Atacado</th><th>Estoque</th></tr>
+                {% for p in produtos %}
+                <tr>
+                    <td>{{ p.codigo }}</td>
+                    <td>{{ p.nome }}</td>
+                    <td>R$ {{ '%.2f'|format(p.preco_varejo or 0) }}</td>
+                    <td>R$ {{ '%.2f'|format(p.preco_atacado or 0) }}</td>
+                    <td>{{ p.estoque or 0 }}</td>
+                </tr>
+                {% endfor %}
+                {% if not produtos %}
+                <tr><td colspan="5">Nenhum produto.</td></tr>
+                {% endif %}
+            </table>
+        </div>
     </div>
+
+    <div class="footer-buttons">
+        <a class="btn" href="{{ url_for('produtos') }}">Produtos</a>
+        <a class="btn" href="{{ url_for('movimentacoes') }}">Movimentações</a>
+        <a class="btn" href="{{ url_for('index') }}">Menu</a>
+    </div>
+
+<script>
+(function(){
+    const busca = document.getElementById('busca');
+    const resultados = document.getElementById('resultados');
+    const cartBody = document.getElementById('cartBody');
+    const vazioRow = document.getElementById('vazioRow');
+    const totalSpan = document.getElementById('totalSpan');
+    const totalInput = document.getElementById('totalInput');
+    const itensJsonInput = document.getElementById('itens_json');
+
+    let cart = [];
+
+    function money(v){ return (Math.round(v*100)/100).toFixed(2); }
+
+    function renderResultados(list){
+        resultados.innerHTML = '';
+        if(!list || list.length===0){
+            resultados.classList.add('hide');
+            return;
+        }
+        resultados.classList.remove('hide');
+        list.forEach(p => {
+            const row = document.createElement('div');
+            row.className = 'result-row';
+            row.innerHTML = `
+                <div>${p.codigo || '-'}</div>
+                <div>${p.nome}</div>
+                <div>R$ ${money(p.preco_varejo||0)}</div>
+                <div>R$ ${money(p.preco_atacado||0)}</div>
+                <div>${p.estoque||0}</div>
+                <div><button data-codigo="${p.codigo}" data-nome="${p.nome}" data-varejo="${p.preco_varejo||0}" data-atacado="${p.preco_atacado||0}">Adicionar</button></div>
+            `;
+            row.querySelector('button').addEventListener('click', (e)=>{
+                e.preventDefault();
+                addToCart({
+                    codigo: p.codigo || '',
+                    nome: p.nome,
+                    preco_varejo: Number(p.preco_varejo||0),
+                    preco_atacado: Number(p.preco_atacado||0),
+                    qtd: 1,
+                    tipo_preco: 'varejo'
+                });
+            });
+            resultados.appendChild(row);
+        });
+    }
+
+    function fetchProdutos(q){
+        fetch(`/api/produtos?q=${encodeURIComponent(q)}`)
+            .then(r=>r.json())
+            .then(renderResultados)
+            .catch(()=>{ resultados.classList.add('hide'); });
+    }
+
+    let timer=null;
+    busca.addEventListener('input', ()=>{
+        const q = busca.value.trim();
+        clearTimeout(timer);
+        if(!q){ resultados.classList.add('hide'); return; }
+        timer = setTimeout(()=>fetchProdutos(q), 250);
+    });
+
+    function addToCart(prod){
+        // se já existe o mesmo código e tipo_preco, só soma qtd
+        const idx = cart.findIndex(i => i.codigo===prod.codigo && i.tipo_preco===prod.tipo_preco);
+        if(idx>=0){ cart[idx].qtd += 1; }
+        else{
+            cart.push({
+                codigo: prod.codigo,
+                nome: prod.nome,
+                tipo_preco: prod.tipo_preco, // 'varejo' | 'atacado'
+                preco_unit: prod.preco_varejo, // começa em varejo
+                preco_varejo: prod.preco_varejo,
+                preco_atacado: prod.preco_atacado,
+                qtd: prod.qtd
+            });
+        }
+        renderCart();
+    }
+
+    function renderCart(){
+        cartBody.innerHTML = '';
+        if(cart.length===0){
+            cartBody.appendChild(vazioRow);
+            vazioRow.style.display='';
+        } else {
+            vazioRow.style.display='none';
+            cart.forEach((it, i)=>{
+                const tr = document.createElement('tr');
+                const subtotal = it.preco_unit * it.qtd;
+                tr.innerHTML = `
+                    <td>${it.codigo || '-'}</td>
+                    <td>${it.nome}</td>
+                    <td>R$ ${money(it.preco_unit)}</td>
+                    <td>
+                        <select data-idx="${i}">
+                            <option value="varejo" ${it.tipo_preco==='varejo'?'selected':''}>Varejo</option>
+                            <option value="atacado" ${it.tipo_preco==='atacado'?'selected':''}>Atacado</option>
+                        </select>
+                    </td>
+                    <td class="inline">
+                        <button class="qtybtn" data-act="menos" data-idx="${i}">−</button>
+                        <span style="min-width:34px; text-align:center;">${it.qtd}</span>
+                        <button class="qtybtn" data-act="mais" data-idx="${i}">+</button>
+                    </td>
+                    <td>R$ ${money(subtotal)}</td>
+                    <td><button class="qtybtn" data-act="remover" data-idx="${i}">Remover</button></td>
+                `;
+                // troca tipo preço
+                tr.querySelector('select').addEventListener('change', (e)=>{
+                    const v = e.target.value;
+                    cart[i].tipo_preco = v;
+                    cart[i].preco_unit = (v==='varejo') ? cart[i].preco_varejo : cart[i].preco_atacado;
+                    renderCart();
+                });
+                // +/- / remover
+                tr.querySelectorAll('button').forEach(btn=>{
+                    btn.addEventListener('click', (e)=>{
+                        e.preventDefault();
+                        const act = btn.getAttribute('data-act');
+                        const idx = Number(btn.getAttribute('data-idx'));
+                        if(act==='menos'){ cart[idx].qtd = Math.max(1, cart[idx].qtd-1); }
+                        if(act==='mais'){ cart[idx].qtd += 1; }
+                        if(act==='remover'){ cart.splice(idx,1); }
+                        renderCart();
+                    });
+                });
+                cartBody.appendChild(tr);
+            });
+        }
+        const total = cart.reduce((s, it)=> s + it.preco_unit*it.qtd, 0);
+        totalSpan.textContent = money(total);
+        totalInput.value = money(total);
+
+        // serializa para enviar
+        const payload = cart.map(it => ({
+            codigo: it.codigo,
+            nome: it.nome,
+            qtd: it.qtd,
+            tipo_preco: it.tipo_preco,
+            preco_unit: it.preco_unit
+        }));
+        itensJsonInput.value = JSON.stringify(payload);
+    }
+
+    // Inicializa vazio
+    renderCart();
+})();
+</script>
 </body>
 </html>

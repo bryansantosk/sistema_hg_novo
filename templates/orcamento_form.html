@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>Orçamento #{{ o.id }}</title>
+<style>
+    body { background: url('{{ url_for('static', filename='internal_bg.jpg') }}') no-repeat center center fixed;
+           background-size: cover; font-family: Arial, sans-serif; color:#000; }
+    .wrap { max-width: 900px; margin: 60px auto 140px auto; background: #fff; padding: 20px; border-radius: 8px; }
+    .linha { display:flex; gap:10px; }
+    .linha > div { flex:1; }
+    input, select, textarea { width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; }
+    .hdr { text-align:center; font-weight:bold; font-size: 22px; margin-bottom: 10px; }
+    .box { border:1px solid #777; padding:10px; border-radius:6px; margin-top:8px; }
+    table { width:100%; border-collapse:collapse; margin-top: 8px; }
+    th, td { border:1px solid #777; padding:8px; }
+    th { background:#333; color:#fff; }
+    .btn { display:inline-block; padding:8px 12px; background:#00c851; color:#fff; text-decoration:none; border:none; border-radius:6px; cursor:pointer; }
+    .btn:hover { background:#007e33; }
+    .footer-buttons { position: fixed; left:0; right:0; bottom:30px; display:flex; justify-content:center; gap:10px; }
+    .muted { color:#666; font-size:12px; }
+    .results { background:#fff; border:1px solid #ddd; border-radius:6px; margin-top:6px; max-height:220px; overflow:auto; }
+    .resrow { display:grid; grid-template-columns: 70px 1fr 110px 110px 80px; gap:8px; padding:6px; border-bottom:1px solid #eee; }
+    .resrow:nth-child(odd){ background:#fafafa; }
+    .resrow button { padding:6px 10px; background:#00c851; color:#fff; border:none; border-radius:6px; cursor:pointer; }
+    .resrow button:hover { background:#007e33; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+    <div class="hdr">HG MOTO PEÇAS</div>
+    <div class="box">
+        <div><strong>PORTAL DOS IPES – RUA:G – Nº61 – MONTES CLAROS</strong></div>
+        <div><strong>FONE:(38) 9 9257-4002    CNPJ:56.334.244/0001-65</strong></div>
+    </div>
+
+    <form id="formOrc" method="post">
+        <div class="linha" style="margin-top:8px;">
+            <div class="box">
+                <label><strong>CLIENTE:</strong></label>
+                <input name="cliente" value="{{ o.cliente or '' }}">
+            </div>
+            <div class="box">
+                <label><strong>DATA:</strong></label>
+                <input type="date" name="data" value="{{ o.data }}">
+            </div>
+        </div>
+
+        <div class="linha">
+            <div class="box">
+                <label><strong>MOTO:</strong></label>
+                <input name="moto" value="{{ o.moto or '' }}">
+            </div>
+            <div class="box">
+                <label><strong>SERVIÇO:</strong></label>
+                <input name="servico" value="{{ o.servico or '' }}">
+            </div>
+            <div class="box">
+                <label><strong>GARANTIA:</strong></label>
+                <input value="90 DIAS GARANTIA" disabled>
+            </div>
+        </div>
+
+        <div class="box" style="margin-top:10px;">
+            <label>Adicionar item (pesquise produto por código ou nome):</label>
+            <input type="text" id="busca" placeholder="Ex.: 001 ou Pneu...">
+            <div id="resultados" class="results" style="display:none;"></div>
+            <div class="muted">Clique em <b>Adicionar</b> para mandar para a tabela.</div>
+        </div>
+
+        <div class="box">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:90px;">UND</th>
+                        <th>DESCRIÇÃO</th>
+                        <th style="width:160px;">VALOR (R$)</th>
+                        <th style="width:100px;">AÇÃO</th>
+                    </tr>
+                </thead>
+                <tbody id="itensBody"></tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="2" style="text-align:right;"><strong>VALOR TOTAL=</strong></td>
+                        <td colspan="2"><strong>R$ <span id="totalSpan">0,00</span></strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <input type="hidden" name="itens_json" id="itens_json">
+        <input type="hidden" name="total" id="totalInput">
+
+        <div class="box">
+            <button class="btn" type="submit" name="action" value="salvar">Salvar</button>
+            <button class="btn" type="button" id="btnFinalizar">Finalizar Orçamento</button>
+            <a class="btn" href="{{ url_for('orcamento_imprimir', oid=o.id) }}" target="_blank">Imprimir</a>
+        </div>
+    </form>
+
+    <div class="box" style="margin-top:8px;">
+        <em>OBS: GARANTIA NÃO COBRE MAL USO</em>
+    </div>
+</div>
+
+<div class="footer-buttons">
+    <a class="btn" href="{{ url_for('orcamentos_list') }}">Orçamentos</a>
+    <a class="btn" href="{{ url_for('index') }}">Menu</a>
+</div>
+
+<script>
+(function(){
+    const itensBody = document.getElementById('itensBody');
+    const totalSpan = document.getElementById('totalSpan');
+    const totalInput = document.getElementById('totalInput');
+    const itensJson = document.getElementById('itens_json');
+    const busca = document.getElementById('busca');
+    const resultados = document.getElementById('resultados');
+    const form = document.getElementById('formOrc');
+    let cart = [];
+
+    function money(v){ return (Math.round(v*100)/100).toFixed(2).replace('.', ','); }
+    function unmoney(s){ return Number(String(s).replace('.', '').replace(',', '.')); }
+
+    // carrega itens existentes do backend
+    {% if itens and itens|length > 0 %}
+        cart = {{ itens|tojson }};
+    {% endif %}
+
+    function render(){
+        itensBody.innerHTML = '';
+        if(cart.length===0){
+            const tr = document.createElement('tr');
+            tr.innerHTML = '<td colspan="4">Nenhum item.</td>';
+            itensBody.appendChild(tr);
+        }else{
+            cart.forEach((it, i)=>{
+                const tr = document.createElement('tr');
+                const subtotal = (Number(it.valor_unit)||0) * (Number(it.qtd)||0);
+                it.subtotal = subtotal;
+                tr.innerHTML = `
+                    <td style="text-align:center;">
+                        <button class="btn" data-act="menos" data-idx="${i}" style="padding:4px 8px;">−</button>
+                        <span style="display:inline-block; width:36px; text-align:center;">${it.qtd}</span>
+                        <button class="btn" data-act="mais" data-idx="${i}" style="padding:4px 8px;">+</button>
+                    </td>
+                    <td>${it.nome}</td>
+                    <td>
+                        <input type="text" data-idx="${i}" data-role="valor" value="${money(it.valor_unit||0)}">
+                    </td>
+                    <td><button class="btn" data-act="rem" data-idx="${i}">Remover</button></td>
+                `;
+                // eventos
+                tr.querySelectorAll('button').forEach(b=>{
+                    b.addEventListener('click', (e)=>{
+                        e.preventDefault();
+                        const act = b.getAttribute('data-act');
+                        const idx = Number(b.getAttribute('data-idx'));
+                        if(act==='menos'){ cart[idx].qtd = Math.max(1, Number(cart[idx].qtd||1)-1); }
+                        if(act==='mais'){ cart[idx].qtd = Number(cart[idx].qtd||1)+1; }
+                        if(act==='rem'){ cart.splice(idx,1); }
+                        render();
+                    });
+                });
+                tr.querySelector('input[data-role="valor"]').addEventListener('change', (e)=>{
+                    const idx = Number(e.target.getAttribute('data-idx'));
+                    cart[idx].valor_unit = unmoney(e.target.value);
+                    render();
+                });
+                itensBody.appendChild(tr);
+            });
+        }
+        const total = cart.reduce((s, it)=> s + (Number(it.valor_unit)||0)*(Number(it.qtd)||0), 0);
+        totalSpan.textContent = money(total);
+        totalInput.value = (Math.round(total*100)/100).toFixed(2);
+        itensJson.value = JSON.stringify(cart);
+    }
+
+    function renderResultados(list){
+        resultados.innerHTML = '';
+        if(!list || list.length===0){ resultados.style.display='none'; return; }
+        resultados.style.display='';
+        list.forEach(p=>{
+            const row = document.createElement('div');
+            row.className = 'resrow';
+            row.innerHTML = `
+                <div>${p.codigo || '-'}</div>
+                <div>${p.nome}</div>
+                <div>Varejo: R$ ${(p.preco_varejo||0).toFixed(2)}</div>
+                <div>Atacado: R$ ${(p.preco_atacado||0).toFixed(2)}</div>
+                <div><button>Adicionar</button></div>
+            `;
+            row.querySelector('button').addEventListener('click', (e)=>{
+                e.preventDefault();
+                cart.push({
+                    codigo: p.codigo || '',
+                    nome: p.nome,
+                    qtd: 1,
+                    valor_unit: Number(p.preco_varejo||0)  // começa com varejo, pode editar
+                });
+                render();
+            });
+            resultados.appendChild(row);
+        });
+    }
+
+    let t=null;
+    busca.addEventListener('input', ()=>{
+        clearTimeout(t);
+        const q = busca.value.trim();
+        if(!q){ resultados.style.display='none'; return; }
+        t=setTimeout(()=>{
+            fetch(`/api/produtos?q=${encodeURIComponent(q)}`)
+                .then(r=>r.json())
+                .then(renderResultados)
+                .catch(()=>{ resultados.style.display='none'; });
+        }, 250);
+    });
+
+    // finalizar com forma de pagamento
+    document.getElementById('btnFinalizar').addEventListener('click', ()=>{
+        const forma = prompt('Forma de pagamento (Dinheiro, Cartão, PIX, etc.):','Dinheiro');
+        if(forma===null){ return; }
+        const inputTmp = document.createElement('input');
+        inputTmp.type='hidden'; inputTmp.name='forma_pagamento'; inputTmp.value=forma;
+        form.appendChild(inputTmp);
+        const action = document.createElement('input');
+        action.type='hidden'; action.name='action'; action.value='finalizar';
+        form.appendChild(action);
+        form.submit();
+    });
+
+    render();
+})();
+</script>
+</body>
+</html>

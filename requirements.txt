@@ -1,5 +1,6 @@
-flask
-flask_sqlalchemy
-gunicorn
-psycopg2-binary
-xhtml2pdf
+Flask==3.1.2
+Flask-SQLAlchemy==3.1.1
+SQLAlchemy==2.0.43
+psycopg2-binary==2.9.10
+gunicorn==23.0.0
+tzdata==2024.2
